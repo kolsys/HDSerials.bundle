@@ -105,14 +105,14 @@ def ShowInfo(path):
 
     oc = ObjectContainer(title2=info['title'])
 
-    if info['seasons']:
+    if 'seasons' in info:
         call = VideoSeasons
         if len(info['seasons']) == 1:
             call = VideoEpisodes
         oc.add(TVShowObject(
             key=Callback(
                 call,
-                info=JSON.StringFromObject(info)
+                path=path
             ),
             rating_key=path,
             title=u'%s' % info['title'],
@@ -129,8 +129,11 @@ def ShowInfo(path):
 
 
 @route(PREFIX + '/seasons')
-def VideoSeasons(info):
-    data = JSON.ObjectFromString(info)
+def VideoSeasons(path):
+
+    data = ParsePage(path)
+    if not data:
+        return ContentNotFound()
 
     oc = ObjectContainer(title2=data['title'])
     seasons = data['seasons'].keys()
@@ -140,7 +143,7 @@ def VideoSeasons(info):
         oc.add(SeasonObject(
             key=Callback(
                 VideoEpisodes,
-                info=info,
+                path=path,
                 season=season
             ),
             rating_key=GetEpisodeURL(data['url'], season, 0),
@@ -155,9 +158,11 @@ def VideoSeasons(info):
 
 
 @route(PREFIX + '/episodes')
-def VideoEpisodes(info, season='1'):
+def VideoEpisodes(path, season='1'):
 
-    data = JSON.ObjectFromString(info)
+    data = ParsePage(path)
+    if not data:
+        return ContentNotFound()
 
     if season != data['current_season']:
         update = GetInfoByURL(
@@ -168,6 +173,7 @@ def VideoEpisodes(info, season='1'):
             return ContentNotFound()
 
         data.update(update)
+        Data.SaveObject('parse_cache', data)
 
     oc = ObjectContainer(title2=data['title'])
 
@@ -181,11 +187,15 @@ def VideoEpisodes(info, season='1'):
 
 
 @route(PREFIX + '/view')
-def VideoView(info, episode):
-    item = JSON.ObjectFromString(info)
+def VideoView(path, episode, variant=None):
+
+    item = ParsePage(path)
+    if not item:
+        return ContentNotFound()
 
     if not item:
         raise Ex.MediaNotAvailable
+
 
     if episode and episode != item['current_episode']:
         update = GetInfoByURL(GetEpisodeURL(
@@ -196,6 +206,7 @@ def VideoView(info, episode):
         if not update:
             return ContentNotFound()
         item.update(update)
+        Data.SaveObject('parse_cache', item)
 
     return ObjectContainer(objects=[GetVideoObject(item, episode)])
 
@@ -226,8 +237,6 @@ def VideoPlay(session):
 
     Log.Debug('Try to play %s' % res)
 
-    # return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(res))
-
     # Some players does not support gziped response
     path = res.split('/')
     path.pop()
@@ -254,10 +263,9 @@ def GetVideoObject(item, episode=0):
 
     if episode:
         obj = EpisodeObject(
-        # obj = VideoClipObject(
             key=Callback(
                 VideoView,
-                info=JSON.StringFromObject(item),
+                path=item['path'],
                 episode=episode
             ),
             rating_key=GetEpisodeURL(
@@ -266,26 +274,26 @@ def GetVideoObject(item, episode=0):
                 episode
             ),
             source_title=TITLE,
-            # summary=item['summary'],
+            summary=item['summary'],
             thumb=item['thumb'],
             source_icon=ICON,
             rating=item['rating'],
             title=item['episodes'][episode],
-            # season=int(item['current_season']),
-            # index=int(episode),
-            # show=item['title'],
+            season=int(item['current_season']),
+            index=int(episode),
+            show=item['title'],
 
             duration=2637000,
             originally_available_at=date.fromtimestamp(1380571200),
 
             directors=item['directors'] if 'directors' in item else None,
-            # guest_stars=item['roles'] if 'roles' in item else None,
+            guest_stars=item['roles'] if 'roles' in item else None,
         )
     else:
         obj = MovieObject(
             key=Callback(
                 VideoView,
-                info=JSON.StringFromObject(item),
+                path=item['path'],
                 episode=episode
             ),
             source_title=TITLE,
@@ -303,22 +311,24 @@ def GetVideoObject(item, episode=0):
             year=int(item['year']) if 'year' in item else None,
         )
 
-    obj.add(MediaObject(
-        parts=[PartObject(
-            key=HTTPLiveStreamURL(
-                Callback(
-                    VideoPlay,
-                    session=JSON.StringFromObject(item['session'])
+    for k in item['variants']:
+        obj.add(MediaObject(
+            parts=[PartObject(
+                key=HTTPLiveStreamURL(
+                    Callback(
+                        VideoPlay,
+                        session=JSON.StringFromObject(item['variants'][k]['session'])
+                    )
                 )
-            )
-        )],
-        video_resolution=720,
-        container=Container.MP4,
-        video_codec=VideoCodec.H264,
-        audio_codec=AudioCodec.AAC,
-        optimized_for_streaming=True,
-        audio_channels=2
-    ))
+            )],
+            video_resolution=720,
+            container=Container.MP4,
+            video_codec=VideoCodec.H264,
+            audio_codec=AudioCodec.AAC,
+            optimized_for_streaming=True,
+            audio_channels=2,
+        ))
+
     return obj
 
 
@@ -334,30 +344,42 @@ def ContentNotFound():
 
 
 def ParsePage(path):
+    if Data.Exists('parse_cache'):
+        ret = Data.LoadObject('parse_cache')
+        if ret and 'path' in ret and ret['path'] == path:
+            Log.Debug('Return from cache %s' % path)
+            return ret
 
     page = GetPage(path).xpath(
         '//div[@id="k2Container"]'
     )[0]
 
+    data = {'variants': {}}
     try:
-        url = page.xpath(
+        for url in page.xpath(
             '//div[@class="itemFullText"]/p/iframe[@src]'
-        )[0].get('src')
+        ):
+            Log.Debug('Found variant %s', url)
+            variant = GetInfoByURL(url.get('src'))
+            if variant:
+                data['variants'][variant['url']] = variant
+
+        if len(data['variants']) == 0:
+            return None
     except:
         return None
 
-    data = GetInfoByURL(url)
-
-    if not data:
-        return None
+    data.update(data['variants'].itervalues().next())
 
     ret = {
         'path': path,
         'rating': 0.00,
-        'thumb': HDSERIALS_URL + page.xpath(
-            '//div[@class="itemImageBlock"]//a'
-        )[0].get('href'),
-        'url': url,
+        'thumb': '%s%s' % (
+            HDSERIALS_URL,
+            page.xpath(
+                '//div[@class="itemImageBlock"]//a'
+            )[0].get('href')
+        ),
     }
 
     title = [
@@ -369,7 +391,6 @@ def ParsePage(path):
     title.reverse()
     ret['title'] = title.pop()
     ret['original_title'] = title.pop() if len(title) else None
-
 
     # TODO
     meta = page.xpath(
@@ -399,7 +420,7 @@ def ParsePage(path):
         elif current:
             if desc[:1] == ':':
                 desc = desc[2:]
-            data[tmap[current]] = desc
+            data[tmap[current]] = unicode(desc)
 
     for current in ('countries', 'genres', 'directors', 'roles'):
         if current in data:
@@ -412,6 +433,7 @@ def ParsePage(path):
     # ).group(1)) * 10
 
     ret.update(data)
+    Data.SaveObject('parse_cache', ret)
 
     return ret
 
@@ -449,6 +471,7 @@ def GetInfoByURL(url, parent=None):
         return None
 
     ret = {
+        'url': url,
         'session': JSON.ObjectFromString('{%s}' % data.group(1)),
     }
 
@@ -458,13 +481,13 @@ def GetInfoByURL(url, parent=None):
         ret['episodes'] = {}
         for item in res.xpath('//select[@id="season"]/option'):
             value = item.get('value')
-            ret['seasons'][value] = item.text_content()
+            ret['seasons'][value] = unicode(item.text_content())
             if item.get('selected'):
                 ret['current_season'] = value
 
         for item in res.xpath('//select[@id="episode"]/option'):
             value = item.get('value')
-            ret['episodes'][value] = item.text_content()
+            ret['episodes'][value] = unicode(item.text_content())
             if item.get('selected'):
                 ret['current_episode'] = value
 
