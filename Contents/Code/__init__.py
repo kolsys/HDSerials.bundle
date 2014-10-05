@@ -61,6 +61,10 @@ def MainMenu():
         key=Callback(ShowNews),
         title=u'Новые серии'
     ))
+    oc.add(DirectoryObject(
+        key=Callback(ShowPopular),
+        title=u'Популярное'
+    ))
 
     for cat in cats:
         title = cat.text_content()
@@ -90,8 +94,94 @@ def ShowNews():
     return oc
 
 
+@route(PREFIX + '/popular')
+def ShowPopular():
+    page = GetPage('/popular.html').xpath(
+        '//div[contains(@class, "nspArts")]//div[contains(@class, "nspArt")]/div'
+    )
+    if not page:
+        return ContentNotFound()
+
+    oc = ObjectContainer(title2=u'Популярное')
+    for item in page:
+        link = item.find('a')
+        if link:
+            oc.add(DirectoryObject(
+                key=Callback(ShowInfo, path=link.get('href')),
+                title=item.find('h4').text_content(),
+                thumb=link.find('img').get('src')
+            ))
+
+    return oc
+
+
 @route(PREFIX + '/category')
-def ShowCategory(path, title):
+def ShowCategory(path, title, page=None):
+    content = GetPage(path)
+
+    if not content:
+        return ContentNotFound()
+
+    oc = ObjectContainer(title2=u'%s' % title)
+
+    items = content.xpath(
+        '//div[@class="itemList"]//div[@class="catItemBody"]//span[@class="catItemImage"]/a'
+    )
+    cats = None
+
+    if not page:
+        cats = content.xpath(
+            '//div[@class="itemListSubCategories"]//div[contains(@class, "subCategory")]/h2/a'
+        )
+
+    if cats:
+        if items:
+            oc.add(DirectoryObject(
+                title=u'Все %s' % title.lower(),
+                key=Callback(ShowCategory, path=path, title=title, page=1)
+            ))
+
+        for item in cats:
+            title = u'%s' % item.text_content()
+            oc.add(DirectoryObject(
+                title=title,
+                key=Callback(ShowSubCategory, path=item.get('href'), title=title)
+            ))
+    elif items:
+        for item in items:
+            title = u'%s' % item.text_content()
+            oc.add(DirectoryObject(
+                title=u'%s' % item.get('title'),
+                key=Callback(ShowInfo, path=item.get('href')),
+                thumb='%s%s' % (
+                    HDSERIALS_URL,
+                    item.find('img').get('src')
+                ),
+            ))
+    else:
+        return ContentNotFound()
+
+    return oc
+
+    # oc.add(TVShowObject(
+    #     key=Callback(
+    #         call,
+    #         path=path
+    #     ),
+    #     rating_key=path,
+    #     title=u'%s' % info['title'],
+    #     rating=info['rating'],
+    #     summary=info['summary'],
+    #     thumb=info['thumb'],
+    #     source_icon=ICON,
+    #     countries=info['countries'] if 'countries' in info else None,
+    # ))
+
+    return oc
+
+
+@route(PREFIX + '/subcategory')
+def ShowSubCategory(path, title):
     oc = ObjectContainer(title2=u'%s' % title)
     return oc
 
@@ -106,43 +196,32 @@ def ShowInfo(path):
     oc = ObjectContainer(title2=info['title'])
 
     if 'seasons' in info:
-        call = VideoSeasons
         if len(info['seasons']) == 1:
-            call = VideoEpisodes
-        oc.add(TVShowObject(
-            key=Callback(
-                call,
-                path=path
-            ),
-            rating_key=path,
-            title=u'%s' % info['title'],
-            rating=info['rating'],
-            summary=info['summary'],
-            thumb=info['thumb'],
-            source_icon=ICON,
-            countries=info['countries'] if 'countries' in info else None,
-        ))
+            return Episodes(path)
+        else:
+            return Seasons(path)
     else:
-        oc.add(GetVideoObject(info))
-
-    return oc
+        return View(path, None)
 
 
 @route(PREFIX + '/seasons')
-def VideoSeasons(path):
+def Seasons(path):
 
     data = ParsePage(path)
     if not data:
         return ContentNotFound()
 
-    oc = ObjectContainer(title2=data['title'])
+    oc = ObjectContainer(
+        title2=data['title'],
+        content=ContainerContent.Seasons
+    )
     seasons = data['seasons'].keys()
 
     seasons.sort(key=lambda k: int(k))
     for season in seasons:
         oc.add(SeasonObject(
             key=Callback(
-                VideoEpisodes,
+                Episodes,
                 path=path,
                 season=season
             ),
@@ -158,24 +237,21 @@ def VideoSeasons(path):
 
 
 @route(PREFIX + '/episodes')
-def VideoEpisodes(path, season='1'):
+def Episodes(path, season='1'):
 
     data = ParsePage(path)
     if not data:
         return ContentNotFound()
 
     if season != data['current_season']:
-        update = GetInfoByURL(
-            GetEpisodeURL(data['url'], season, 1),
-            data['url']
-        )
-        if not update:
+        data = UpdateItemInfo(data, season, 1)
+        if not data:
             return ContentNotFound()
 
-        data.update(update)
-        Data.SaveObject('parse_cache', data)
-
-    oc = ObjectContainer(title2=data['title'])
+    oc = ObjectContainer(
+        title2=u'%s / %s' % (data['title'], data['seasons'][season]),
+        content=ContainerContent.Episodes
+    )
 
     episodes = data['episodes'].keys()
     episodes.sort(key=lambda k: int(k))
@@ -187,7 +263,7 @@ def VideoEpisodes(path, season='1'):
 
 
 @route(PREFIX + '/view')
-def VideoView(path, episode, variant=None):
+def View(path, episode, variant=None):
 
     item = ParsePage(path)
     if not item:
@@ -196,28 +272,25 @@ def VideoView(path, episode, variant=None):
     if not item:
         raise Ex.MediaNotAvailable
 
-
     if episode and episode != item['current_episode']:
-        update = GetInfoByURL(GetEpisodeURL(
-            item['url'],
-            item['current_season'],
-            episode
-        ), item['url'])
-        if not update:
+        item = UpdateItemInfo(item, item['current_season'], episode)
+        if not item:
             return ContentNotFound()
-        item.update(update)
-        Data.SaveObject('parse_cache', item)
 
-    return ObjectContainer(objects=[GetVideoObject(item, episode)])
-
-
-# @route(PREFIX + '/view/extras')
-# def VideoViewExtras():
-#     return ObjectContainer()
+    return ObjectContainer(
+        objects=[GetVideoObject(item, episode)],
+        content=ContainerContent.Episodes if episode else ContainerContent.Movies,
+    )
 
 
-@route(PREFIX + '/play.m3u')
-def VideoPlay(session):
+@route(PREFIX + '/view/extras')
+def ViewExtras():
+    return ObjectContainer()
+
+
+@indirect
+@route(PREFIX + '/play')
+def Play(session):
     res = JSON.ObjectFromURL(
         url='http://moonwalk.cc//sessions/create_session',
         values=JSON.ObjectFromString(session),
@@ -230,6 +303,7 @@ def VideoPlay(session):
 
     try:
         res = HTTP.Request(res['manifest_m3u8']).content
+        Log.Debug('Found streams: %s' % res)
     except:
         raise Ex.MediaNotAvailable
 
@@ -237,8 +311,19 @@ def VideoPlay(session):
 
     Log.Debug('Try to play %s' % res)
 
+    # host with ip can return bad headers
+    # if Regex('https?://(?:\d+)\.(?:\d+)\.(?:\d+)\.(?:\d+)/').match(res):
+    res = Callback(Playlist, res=res)
+
+    return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(res))
+
+
+@route(PREFIX + '/playlist.m3u8')
+def Playlist(res):
+
+    Log.Debug('Modify playlist %s' % res)
     # Some players does not support gziped response
-    path = res.split('/')
+    path = res.replace('tracks-2,4', 'tracks-1,4').split('/')
     path.pop()
     path = '/'.join(path)
     try:
@@ -261,10 +346,26 @@ def GetVideoObject(item, episode=0):
     #         NormalizeExternalUrl(item['files']['external'])
     #     )
 
+    kwargs = {
+        'source_title': TITLE,
+        'source_icon': ICON
+    }
+
+    for k in [
+        'summary', 'thumb', 'directors',
+        'rating', 'duration',
+        'originally_available_at',
+    ]:
+        if k in item and item[k]:
+            kwargs[k] = item[k]
+
     if episode:
+        if 'roles' in item:
+            kwargs['guest_stars'] = item['roles']
+
         obj = EpisodeObject(
             key=Callback(
-                VideoView,
+                View,
                 path=item['path'],
                 episode=episode
             ),
@@ -273,60 +374,46 @@ def GetVideoObject(item, episode=0):
                 item['current_season'],
                 episode
             ),
-            source_title=TITLE,
-            summary=item['summary'],
-            thumb=item['thumb'],
-            source_icon=ICON,
-            rating=item['rating'],
             title=item['episodes'][episode],
             season=int(item['current_season']),
             index=int(episode),
             show=item['title'],
-
-            duration=2637000,
-            originally_available_at=date.fromtimestamp(1380571200),
-
-            directors=item['directors'] if 'directors' in item else None,
-            guest_stars=item['roles'] if 'roles' in item else None,
+            **kwargs
         )
     else:
-        obj = MovieObject(
+        for k in ['year', 'original_title', 'countries']:
+            if k in item and item[k]:
+                kwargs[k] = item[k]
+
+        # if 'roles' in item:
+        #     kwargs['roles'] = [RoleObject(actor=v) for v in item['roles']]
+
+        # obj = MovieObject(
+        obj = VideoClipObject(
             key=Callback(
-                VideoView,
+                View,
                 path=item['path'],
                 episode=episode
             ),
-            source_title=TITLE,
-            summary=item['summary'],
-            thumb=item['thumb'],
-            source_icon=ICON,
-            rating=item['rating'],
             title=item['title'],
             rating_key=item['url'],
-            original_title=item['original_title'],
-            roles=item['roles'] if 'roles' in item else None,
-            countries=item['countries'] if 'countries' in item else None,
-            directors=item['directors'] if 'directors' in item else None,
-            genres=item['genres'] if 'genres' in item else None,
-            year=int(item['year']) if 'year' in item else None,
+            **kwargs
         )
 
     for k in item['variants']:
         obj.add(MediaObject(
             parts=[PartObject(
-                key=HTTPLiveStreamURL(
-                    Callback(
-                        VideoPlay,
-                        session=JSON.StringFromObject(item['variants'][k]['session'])
-                    )
-                )
+                key=Callback(
+                    Play,
+                    session=JSON.StringFromObject(item['variants'][k]['session'])
+                ),
             )],
             video_resolution=720,
-            container=Container.MP4,
+            container='mpegts',
             video_codec=VideoCodec.H264,
             audio_codec=AudioCodec.AAC,
             optimized_for_streaming=True,
-            audio_channels=2,
+            audio_channels=2
         ))
 
     return obj
@@ -357,7 +444,7 @@ def ParsePage(path):
     data = {'variants': {}}
     try:
         for url in page.xpath(
-            '//div[@class="itemFullText"]/p/iframe[@src]'
+            '//div[@class="itemFullText"]//iframe[@src]'
         ):
             Log.Debug('Found variant %s', url)
             variant = GetInfoByURL(url.get('src'))
@@ -368,8 +455,6 @@ def ParsePage(path):
             return None
     except:
         return None
-
-    data.update(data['variants'].itervalues().next())
 
     ret = {
         'path': path,
@@ -388,13 +473,14 @@ def ParsePage(path):
         )[0].text_content().split('/')
     ]
 
-    title.reverse()
-    ret['title'] = title.pop()
-    ret['original_title'] = title.pop() if len(title) else None
+    ret['original_title'] = title.pop() if len(title) > 1 else None
+    ret['title'] = ' / '.join(title)
 
-    # TODO
     meta = page.xpath(
-        '//div[@class="itemFullText"]//text() | //span'
+        '//div[@class="itemFullText"]//text() ' +
+        '| //div[@class="itemFullText"]//span ' +
+        '| //div[@class="itemFullText"]//strong ' +
+        '| //div[@class="itemFullText"]//p[@style="text-align: center;"]'
     )
 
     tmap = {
@@ -408,11 +494,14 @@ def ParsePage(path):
     }
 
     current = None
+    variants_names = []
     for desc in meta:
         if not isinstance(desc, basestring):
+            if desc.tag == 'p' and u'Перевод' in desc.text_content():
+                variants_names.append(desc.text_content())
+                current = None
             continue
         if not desc:
-            current = None
             continue
 
         if desc in tmap:
@@ -420,22 +509,60 @@ def ParsePage(path):
         elif current:
             if desc[:1] == ':':
                 desc = desc[2:]
-            data[tmap[current]] = unicode(desc)
+
+            if tmap[current] in data:
+                data[tmap[current]] = data[tmap[current]]+' '+unicode(desc)
+            else:
+                data[tmap[current]] = unicode(desc)
 
     for current in ('countries', 'genres', 'directors', 'roles'):
         if current in data:
             data[current] = [l.strip() for l in data[current].split(',')]
 
-    # rating = float(Regex('width\s?:\s?([\d\.]+)').search(
+    # TODO
+    data['duration'] = None
+    # data['duration'] = Datetime.MillisecondsFromString(data['duration'])
+    # data['rating'] = float(Regex('width\s?:\s?([\d\.]+)').search(
     #     page.xpath(
     #         '//div[@class="itemRatingBlock"]//li[@class="itemCurrentRating"]'
     #     )[0].get('class')
     # ).group(1)) * 10
+    if 'year' in data:
+        data['year'] = int(data['year'])
+
+    for k in data['variants']:
+        data['variants'][k]['variant_title'] = unicode(
+            variants_names.pop(0)
+        ) if variants_names else ''
+
+    data.update(data['variants'].itervalues().next())
 
     ret.update(data)
     Data.SaveObject('parse_cache', ret)
 
     return ret
+
+
+# TODO
+# Нет первого сезона /Serialy/Sverh-estestvennoe/Sverh-estestvennoe-/-Supernatural.html
+# Не все сезоны / серии есть в разных переводах /Serialy/Podpolnaya-Imperiya-/-Boardwalk-Empire/Podpolnaya-Imperiya.html
+# Content not found /Anime/Romantika/Volchitsa-i-pryanosti-3-sezon-/-Spice-and-Wolf-3.html
+
+def UpdateItemInfo(item, season, episode):
+    update = GetInfoByURL(GetEpisodeURL(
+        item['url'],
+        season,
+        episode
+    ), item['url'])
+    if not update:
+        return None
+
+    item.update(update)
+    item['variants'][item['url']].update(update)
+
+    Data.SaveObject('parse_cache', item)
+
+    return item
 
 
 def GetInfoByURL(url, parent=None):
@@ -471,7 +598,7 @@ def GetInfoByURL(url, parent=None):
         return None
 
     ret = {
-        'url': url,
+        'url': parent if parent else url,
         'session': JSON.ObjectFromString('{%s}' % data.group(1)),
     }
 
