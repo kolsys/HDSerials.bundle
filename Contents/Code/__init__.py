@@ -116,38 +116,43 @@ def ShowPopular():
 
 
 @route(PREFIX + '/category')
-def ShowCategory(path, title, page=None):
-    content = GetPage(path)
+def ShowCategory(path, title, show_items=False):
+    page = GetPage(path)
 
-    if not content:
+    if not page:
         return ContentNotFound()
 
     oc = ObjectContainer(title2=u'%s' % title)
 
-    items = content.xpath(
+    items = page.xpath(
         '//div[@class="itemList"]//div[@class="catItemBody"]//span[@class="catItemImage"]/a'
     )
     cats = None
 
-    if not page:
-        cats = content.xpath(
+    if not show_items:
+        cats = page.xpath(
             '//div[@class="itemListSubCategories"]//div[contains(@class, "subCategory")]/h2/a'
         )
 
     if cats:
+        # Add all items category
         if items:
             oc.add(DirectoryObject(
                 title=u'Все %s' % title.lower(),
-                key=Callback(ShowCategory, path=path, title=title, page=1)
+                key=Callback(ShowCategory, path=path, title=title, show_items=True)
             ))
 
         for item in cats:
             title = u'%s' % item.text_content()
             oc.add(DirectoryObject(
                 title=title,
-                key=Callback(ShowSubCategory, path=item.get('href'), title=title)
+                key=Callback(ShowCategory, path=item.get('href'), title=title)
             ))
     elif items:
+        # View subcategory with single item
+        if not show_items and len(items) == 1:
+            return ShowInfo(items[0].get('href'))
+
         for item in items:
             title = u'%s' % item.text_content()
             oc.add(DirectoryObject(
@@ -158,31 +163,22 @@ def ShowCategory(path, title, page=None):
                     item.find('img').get('src')
                 ),
             ))
+        next_page = page.xpath(
+            '//div[@class="k2Pagination"]/ul/li[@class="pagination-next"]/a'
+        )
+        if next_page:
+            oc.add(NextPageObject(
+                title=u'%s' % next_page[0].text_content(),
+                key=Callback(
+                    ShowCategory,
+                    path=next_page[0].get('href'),
+                    title=title,
+                    show_items=True
+                )
+            ))
     else:
         return ContentNotFound()
 
-    return oc
-
-    # oc.add(TVShowObject(
-    #     key=Callback(
-    #         call,
-    #         path=path
-    #     ),
-    #     rating_key=path,
-    #     title=u'%s' % info['title'],
-    #     rating=info['rating'],
-    #     summary=info['summary'],
-    #     thumb=info['thumb'],
-    #     source_icon=ICON,
-    #     countries=info['countries'] if 'countries' in info else None,
-    # ))
-
-    return oc
-
-
-@route(PREFIX + '/subcategory')
-def ShowSubCategory(path, title):
-    oc = ObjectContainer(title2=u'%s' % title)
     return oc
 
 
@@ -196,10 +192,7 @@ def ShowInfo(path):
     oc = ObjectContainer(title2=info['title'])
 
     if 'seasons' in info:
-        if len(info['seasons']) == 1:
-            return Episodes(path)
-        else:
-            return Seasons(path)
+        return Seasons(path)
     else:
         return View(path, None)
 
@@ -210,6 +203,9 @@ def Seasons(path):
     data = ParsePage(path)
     if not data:
         return ContentNotFound()
+
+    if len(data['seasons']) == 1:
+        return Episodes(path, data['current_season'])
 
     oc = ObjectContainer(
         title2=data['title'],
@@ -237,11 +233,28 @@ def Seasons(path):
 
 
 @route(PREFIX + '/episodes')
-def Episodes(path, season='1'):
+def Episodes(path, season):
+
+    Log.Debug('Get episodes for %s' % path)
 
     data = ParsePage(path)
     if not data:
         return ContentNotFound()
+
+    if data['session'] == 'external':
+        oc = ObjectContainer(
+            title2=u'%s' % data['title'],
+            content=ContainerContent.Episodes
+        )
+        for episode in data['episodes']:
+            Log.Debug('Try to get metadata from external: %s' % episode)
+            try:
+                oc.add(URLService.MetadataObjectForURL(
+                    data['episodes'][episode]['url']
+                ))
+            except:
+                continue
+        return oc if len(oc) else ContentNotFound()
 
     if season != data['current_season']:
         data = UpdateItemInfo(data, season, 1)
@@ -266,11 +279,18 @@ def Episodes(path, season='1'):
 def View(path, episode, variant=None):
 
     item = ParsePage(path)
-    if not item:
-        return ContentNotFound()
 
     if not item:
         raise Ex.MediaNotAvailable
+
+    if item['session'] == 'external':
+        Log.Debug('Get from external service %s' % item['url'])
+        try:
+            return ObjectContainer(
+                objects=[URLService.MetadataObjectForURL(item['url'])]
+            )
+        except:
+            raise Ex.MediaNotAvailable
 
     if episode and episode != item['current_episode']:
         item = UpdateItemInfo(item, item['current_season'], episode)
@@ -341,10 +361,6 @@ def Playlist(res):
 
 
 def GetVideoObject(item, episode=0):
-    # if 'external' in item['files']:
-    #     return URLService.MetadataObjectForURL(
-    #         NormalizeExternalUrl(item['files']['external'])
-    #     )
 
     kwargs = {
         'source_title': TITLE,
@@ -537,6 +553,12 @@ def ParsePage(path):
 
     data.update(data['variants'].itervalues().next())
 
+    if data['session'] == 'external':
+        if len(data['variants']) > 1:
+            data['seasons'] = {'1': ret['title']}
+            data['current_season'] = 1
+            data['episodes'] = data['variants']
+
     ret.update(data)
     Data.SaveObject('parse_cache', ret)
 
@@ -566,6 +588,12 @@ def UpdateItemInfo(item, season, episode):
 
 
 def GetInfoByURL(url, parent=None):
+
+    if not Regex('http://moonwalk\.cc/').match(url):
+        return {
+            'url': url.replace('vkontakte.ru', 'vk.com'),
+            'session': 'external',
+        }
 
     headers = {}
     if parent:
