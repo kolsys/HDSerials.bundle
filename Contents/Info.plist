@@ -15,15 +15,10 @@
 	<string>hook</string>
 	<key>CFBundleVersion</key>
 	<string>1.0</string>
-
 	<key>PlexClientPlatforms</key>
 	<string>*</string>
 	<key>PlexFrameworkVersion</key>
 	<string>2</string>
-	<key>PlexMediaContainer</key>
-	<array>
-		<string>MP4</string>
-	</array>
 	<key>PlexVideoCodec</key>
 	<array>
 		<string>H.264</string>
@@ -36,5 +31,6 @@
 	<string>1</string>
 	<key>PlexPluginDevMode</key>
 	<string>1</string>
+
 </dict>
 </plist>

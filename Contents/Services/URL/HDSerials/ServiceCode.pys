@@ -1,41 +1,126 @@
 # -*- coding: utf-8 -*-
 
-# This is dummy service
+import common as Common
+
+
+def NormalizeURL(url):
+    return Common.InitMetaUrl(url)
+
 
 def MediaObjectsForURL(url):
-    return [MediaObject(
-        parts=[PartObject(
-            # key=Callback(
-            #     Play,
-            #     session=JSON.StringFromObject(item['variants'][k]['session'])
-            # ),
-            key=HTTPLiveStreamURL(
-                'http://37.220.36.26/vod/drive8/Fringe.s05/Fringe_s05e13.mp4/tracks-1,4/index.m3u8'
-            )
-        )],
-        video_resolution=720,
-        container='mpegts',
-        video_codec=VideoCodec.H264,
-        audio_codec=AudioCodec.AAC,
-        optimized_for_streaming=True,
-        audio_channels=2
-    )]
+    item = url.item
+
+    return [
+        MediaObject(
+            parts=[PartObject(
+                key=Callback(
+                    Play,
+                    session=JSON.StringFromObject(item['variants'][k]['session'])
+                ),
+            )],
+            video_resolution=720,
+            container='mpegts',
+            video_codec=VideoCodec.H264,
+            audio_codec=AudioCodec.AAC,
+            optimized_for_streaming=True,
+            audio_channels=2
+        ) for k in item['variants']
+    ]
 
 
 def MetadataObjectForURL(url):
-    Log.Debug(Dict['test'])
+
+    item = url.item
+    episode = url.episode
 
     kwargs = {
-        'summary': u'   Для многих поклонников этого творения кинематографа показ нового сезона стал настоящим событием – теперь можно  Грань 5 сезон смотреть онлайн ! Скучно при просмотре этого киношедевра точно не будет – сериал наполнен глубоким смыслом и множеством научных и псевдонаучных теорий, которые вряд ли оставят равнодушными как поклонников научной фантастики, так и просто тех людей, которые хотят интересно и нескучно провести свое время. Стоит отметить динамичный сюжет, который наполнен множеством безумных событий, идущих друг за другом. И все это на фоне одного основного сюжета, предугадать развитие которого не в силах даже самый заядлый киноман.  Сериал за Гранью онлайн  – это не просто приятно проведенное время, а еще и самая настоящая пища для ума, потому что многие из фантастических историй основаны на настоящих исследованиях.  И все это тесно переплетается с искрометным юмором, которого в сериале предостаточно. Комичные ситуации героев поджидают сплошь и рядом, да и сами диалоги между главными героями – точно нескучная часть этого творения.  Смотреть Грань онлайн бесплатно рекомендуется всем, независимо от пола и возраста. И причин этому множество. Самые главные из них – это оригинальный сюжет, развитие которого совершенно непредсказуемо и прекрасная игра актеров. Стоит отдельно упомянуть о действующих персонажах. На расследования паранормальных явлений брошен целый штат сотрудников: молодой агент ФБР Оливия Данэм, безумный Доктор Уолтер Бишоп и его «мозговитый» сын с зашкаливающим уровнем IQ, Нина Шарп, которая 16 лет проработала на тайную организацию… В общем, набор персонажей еще тот… Всевозможные необычные события, объяснить которые простому человеку не представляется возможным, загадочные смерти при невероятных обстоятельствах, засекреченные материалы и опасные открытия – все это есть в сериале. Так что вывод очевиден: Грань смотреть онлайн стоит! Потому что это как раз тот сериал, который не заставит скучать своего зрителя. А наиболее внимательные смогут увидеть в сериале множество «намеков» на другие фильмы, которые, несомненно, также порадуют.',
-        'thumb': 'http://www.hdserials.tv/media/k2/items/cache/814c5fa8cc246f42c53a91bddf076dee_XL.jpg',
-        'title': u'Серия 13 SERVICE CODE',
-        'season': 5,
-        'index': 13,
-        'show': u'За Гранью',
-        'source_title': 'HDSerials',
+        'source_title': L(Common.TITLE),
     }
 
-    return EpisodeObject(
-        **kwargs
+    for k in [
+        'summary', 'thumb', 'directors',
+        'rating', 'duration',
+        'originally_available_at',
+    ]:
+        if k in item and item[k]:
+            kwargs[k] = item[k]
+
+
+    if episode:
+        if 'roles' in item:
+            kwargs['guest_stars'] = item['roles']
+
+        obj = EpisodeObject(
+            rating_key=Common.GetEpisodeURL(
+                item['url'],
+                item['current_season'],
+                episode
+            ),
+            title=item['episodes'][str(episode)],
+            season=int(item['current_season']),
+            index=int(episode),
+            show=item['title'],
+            **kwargs
+        )
+    else:
+        for k in ['year', 'original_title', 'countries']:
+            if k in item and item[k]:
+                kwargs[k] = item[k]
+
+        obj = MovieObject(
+            title=item['title'],
+            rating_key=item['url'],
+            **kwargs
+        )
+
+    return obj
+
+
+@indirect
+def Play(session):
+    res = JSON.ObjectFromURL(
+        url='http://moonwalk.cc//sessions/create_session',
+        values=JSON.ObjectFromString(session),
+        method='POST',
+        cacheTime=0
     )
+
+    if not res:
+        raise Ex.MediaNotAvailable
+
+    try:
+        res = HTTP.Request(res['manifest_m3u8']).content
+        Log.Debug('Found streams: %s' % res)
+    except:
+        raise Ex.MediaNotAvailable
+
+    res = [line for line in res.split("\n") if line].pop()
+
+    Log.Debug('Try to play %s' % res)
+
+    res = Callback(Playlist, res=res)
+
+    return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(res))
+
+
+def Playlist(res):
+
+    # Some players does not support gziped response
+    Log.Debug('Modify playlist %s' % res)
+
+    path = res.replace('tracks-2,4', 'tracks-1,4').split('/')
+    path.pop()
+    path = '/'.join(path)
+    try:
+        res = HTTP.Request(res).content.split("\n")
+    except:
+        raise Ex.MediaNotAvailable
+
+    for i in range(0, len(res)):
+        if res[i] == '#EXT-X-ENDLIST':
+            break
+        if res[i][:1] != '#':
+            res[i] = path + '/' + res[i]
+
+    return "\n".join(res)
 

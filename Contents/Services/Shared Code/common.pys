@@ -1,0 +1,82 @@
+# -*- coding: utf-8 -*-
+
+import urllib
+
+PREFIX = '/video/hdserials'
+HDSERIALS_URL = 'http://www.hdserials.tv'
+
+HDSERIALS_META_ROUTE = PREFIX + '/getmeta'
+
+ART = 'art-default.jpg'
+ICON = 'icon-default.png'
+TITLE = 'Title'
+
+
+def GetVideoObject(item, episode=0):
+
+    if item['session'] == 'external':
+        url = info['url']
+        do_normalization = True
+    else:
+        url = MetaUrl('%s||%s' % (item['path'], episode))
+        url.update(item, episode)
+        do_normalization = False
+
+    return URLService.MetadataObjectForURL(
+        url,
+        do_normalization=do_normalization
+    )
+
+
+def GetEpisodeURL(url, season, episode):
+    if season:
+        return '%s?season=%d&episode=%d' % (url, int(season), int(episode))
+    return url
+
+
+def InitMetaUrl(url):
+    Log.Debug('Normalize URL: %s' % url)
+
+    try:
+        # has attribute crutch
+        if url.item:
+            return url
+    except:
+
+        # Fetch there
+        res = url.split('||')
+        res.reverse()
+
+        path = res.pop()
+        episode = res.pop() if len(res) else None
+
+        url = MetaUrl(url)
+
+        try:
+            res = JSON.ObjectFromString(urllib.urlopen(
+                'http://127.0.0.1:32400%s?%s' % (
+                    HDSERIALS_META_ROUTE,
+                    urllib.urlencode({
+                        'path': path,
+                        'episode': episode
+                    })
+                )
+            ).read())
+
+            if res:
+                return url.update(res, episode)
+
+        except:
+            pass
+
+    raise Ex.MediaNotAvailable
+
+
+class MetaUrl(str):
+    item = None
+    episode = None
+
+    def update(self, item, episode):
+        self.item = item
+        self.episode = int(episode)
+        return self
