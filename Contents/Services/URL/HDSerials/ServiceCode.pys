@@ -9,13 +9,36 @@ def NormalizeURL(url):
 
 def MediaObjectsForURL(url):
     item = url.item
+    ret = []
 
-    return [
-        MediaObject(
+    for variant in item['variants'].values():
+        if url.episode and (
+            str(item['current_season']) not in variant['seasons']
+            or str(url.episode) not in variant['episodes']
+        ):
+            continue
+
+        session = None
+        url_update = None
+        episode = None
+        season = None
+
+        if item['url'] == variant['url']:
+            session = JSON.StringFromObject(variant['session'])
+        else:
+            url_update = variant['url']
+            if url.episode:
+                season = item['current_season']
+                episode = url.episode
+
+        ret.append(MediaObject(
             parts=[PartObject(
                 key=Callback(
                     Play,
-                    session=JSON.StringFromObject(item['variants'][k]['session'])
+                    url=url_update,
+                    season=season,
+                    episode=episode,
+                    session=session
                 ),
             )],
             video_resolution=720,
@@ -24,8 +47,9 @@ def MediaObjectsForURL(url):
             audio_codec=AudioCodec.AAC,
             optimized_for_streaming=True,
             audio_channels=2
-        ) for k in item['variants']
-    ]
+        ))
+
+    return ret
 
 
 def MetadataObjectForURL(url):
@@ -77,10 +101,24 @@ def MetadataObjectForURL(url):
 
 
 @indirect
-def Play(session):
+def Play(session, url, season, episode):
+    Log.Debug('Get playlist from %s' % url)
+
+    if not session:
+        url_info = Common.GetInfoByURL(Common.GetEpisodeURL(
+            url, season, episode
+        ), url)
+
+        if not url_info:
+            raise Ex.MediaNotAvailable
+
+        session = url_info['session']
+    else:
+        session = JSON.ObjectFromString(session)
+
     res = JSON.ObjectFromURL(
         url='http://moonwalk.cc//sessions/create_session',
-        values=JSON.ObjectFromString(session),
+        values=session,
         method='POST',
         cacheTime=0
     )
@@ -94,7 +132,7 @@ def Play(session):
     except:
         raise Ex.MediaNotAvailable
 
-    res = [line for line in res.split("\n") if line].pop()
+    res = [line for line in res.splitlines() if line].pop()
 
     Log.Debug('Try to play %s' % res)
 
@@ -112,7 +150,7 @@ def Playlist(res):
     path.pop()
     path = '/'.join(path)
     try:
-        res = HTTP.Request(res).content.split("\n")
+        res = HTTP.Request(res).content.splitlines()
     except:
         raise Ex.MediaNotAvailable
 

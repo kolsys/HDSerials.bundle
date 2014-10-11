@@ -34,6 +34,67 @@ def GetEpisodeURL(url, season, episode):
     return url
 
 
+def GetInfoByURL(url, parent=None):
+    if not Regex('http://moonwalk\.cc/').match(url):
+        return {
+            'url': url.replace('vkontakte.ru', 'vk.com'),
+            'session': 'external',
+        }
+
+    headers = {}
+    if parent:
+        headers['Referer'] = parent
+        if 'Referer' in HTTP.Headers:
+            url = '%s&%s' % (
+                url,
+                urlencode({'referer': HTTP.Headers['Referer']})
+            )
+
+    elif 'Referer' in HTTP.Headers:
+        headers['Referer'] = HTTP.Headers['Referer']
+
+    try:
+        page = HTTP.Request(
+            url,
+            cacheTime=CACHE_1HOUR,
+            headers=headers
+        ).content
+    except Ex.HTTPError, e:
+        Log.Debug(e.hdrs)
+        Log.Debug(e.msg)
+        return None
+
+    data = Regex(
+        ('\$\.post\(\'/sessions\/create_session\', {((?:.|\n)+)}\)\.success')
+    ).search(page, Regex.MULTILINE)
+
+    if not data:
+        return None
+
+    ret = {
+        'url': parent if parent else url,
+        'session': JSON.ObjectFromString('{%s}' % data.group(1)),
+    }
+
+    if ret['session']['content_type'] == 'serial':
+        res = HTML.ElementFromString(page)
+        ret['seasons'] = {}
+        ret['episodes'] = {}
+        for item in res.xpath('//select[@id="season"]/option'):
+            value = item.get('value')
+            ret['seasons'][value] = unicode(item.text_content())
+            if item.get('selected'):
+                ret['current_season'] = value
+
+        for item in res.xpath('//select[@id="episode"]/option'):
+            value = item.get('value')
+            ret['episodes'][value] = unicode(item.text_content())
+            if item.get('selected'):
+                ret['current_episode'] = value
+
+    return ret
+
+
 def InitMetaUrl(url):
     Log.Debug('Normalize URL: %s' % url)
 

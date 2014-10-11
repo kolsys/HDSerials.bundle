@@ -191,8 +191,6 @@ def ShowInfo(path):
     if not info:
         return ContentNotFound()
 
-    oc = ObjectContainer(title2=info['title'])
-
     if 'seasons' in info:
         return Seasons(info['path'])
 
@@ -292,11 +290,6 @@ def GetMeta(path, episode):
     return JSON.StringFromObject(item)
 
 
-@route(Common.PREFIX + '/view/extras')
-def ViewExtras():
-    return ObjectContainer()
-
-
 ###############################################################################
 # Common
 ###############################################################################
@@ -329,9 +322,17 @@ def ParsePage(path):
             '//div[@class="itemFullText"]//iframe[@src]'
         ):
             Log.Debug('Found variant %s', url)
-            variant = GetInfoByURL(url.get('src'))
+            variant = Common.GetInfoByURL(url.get('src'))
             if variant:
                 data['variants'][variant['url']] = variant
+                if 'session' not in data:
+                    data.update(variant)
+                    if 'seasons' in data:
+                        data['seasons'] = variant['seasons'].copy()
+                else:
+                    if 'seasons' in variant:
+                        data['seasons'].update(variant['seasons'])
+
 
         if len(data['variants']) == 0:
             return None
@@ -419,8 +420,6 @@ def ParsePage(path):
             variants_names.pop(0)
         ) if variants_names else ''
 
-    data.update(data['variants'].itervalues().next())
-
     if data['session'] == 'external':
         if len(data['variants']) > 1:
             data['seasons'] = {'1': ret['title']}
@@ -433,86 +432,38 @@ def ParsePage(path):
     return ret
 
 
-# TODO
-# Нет первого сезона /Serialy/Sverh-estestvennoe/Sverh-estestvennoe-/-Supernatural.html
-# Не все сезоны / серии есть в разных переводах /Serialy/Podpolnaya-Imperiya-/-Boardwalk-Empire/Podpolnaya-Imperiya.html
-
 def UpdateItemInfo(item, season, episode):
-    update = GetInfoByURL(Common.GetEpisodeURL(
-        item['url'],
+    url = item['url']
+    season = str(season)
+
+    if season not in item['variants'][url]['seasons']:
+        # Try to search variant with season
+        for variant in item['variants'].values():
+            if season in variant['seasons']:
+                url = variant['url']
+                if int(season) == variant['current_season'] and int(episode) == variant['current_episode']:
+                    update = variant.copy()
+                    del update['seasons']
+                    item.update(update)
+                    return item
+                break
+
+    update = Common.GetInfoByURL(Common.GetEpisodeURL(
+        url,
         season,
         episode
-    ), item['url'])
+    ), url)
     if not update:
         return None
 
+    item['variants'][url].update(update.copy())
+
+    del update['seasons']
     item.update(update)
-    item['variants'][item['url']].update(update)
 
     Data.SaveObject('parse_cache', item)
 
     return item
-
-
-def GetInfoByURL(url, parent=None):
-    if not Regex('http://moonwalk\.cc/').match(url):
-        return {
-            'url': url.replace('vkontakte.ru', 'vk.com'),
-            'session': 'external',
-        }
-
-    headers = {}
-    if parent:
-        headers['Referer'] = parent
-        if 'Referer' in HTTP.Headers:
-            url = '%s&%s' % (
-                url,
-                urlencode({'referer': HTTP.Headers['Referer']})
-            )
-
-    elif 'Referer' in HTTP.Headers:
-        headers['Referer'] = HTTP.Headers['Referer']
-
-    try:
-        page = HTTP.Request(
-            url,
-            cacheTime=CACHE_1HOUR,
-            headers=headers
-        ).content
-    except Ex.HTTPError, e:
-        Log.Debug(e.hdrs)
-        Log.Debug(e.msg)
-        return None
-
-    data = Regex(
-        ('\$\.post\(\'/sessions\/create_session\', {((?:.|\n)+)}\)\.success')
-    ).search(page, Regex.MULTILINE)
-
-    if not data:
-        return None
-
-    ret = {
-        'url': parent if parent else url,
-        'session': JSON.ObjectFromString('{%s}' % data.group(1)),
-    }
-
-    if ret['session']['content_type'] == 'serial':
-        res = HTML.ElementFromString(page)
-        ret['seasons'] = {}
-        ret['episodes'] = {}
-        for item in res.xpath('//select[@id="season"]/option'):
-            value = item.get('value')
-            ret['seasons'][value] = unicode(item.text_content())
-            if item.get('selected'):
-                ret['current_season'] = value
-
-        for item in res.xpath('//select[@id="episode"]/option'):
-            value = item.get('value')
-            ret['episodes'][value] = unicode(item.text_content())
-            if item.get('selected'):
-                ret['current_episode'] = value
-
-    return ret
 
 
 def GetPage(uri, cacheTime=CACHE_1HOUR):
