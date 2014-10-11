@@ -47,7 +47,7 @@ def Start():
     R(Common.ICON)
 )
 def MainMenu():
-    cats = GetPage('/').xpath(
+    cats = Common.GetPage('/').xpath(
         '//div[@id="gkDropMain"]//a[contains(@href, ".html")]'
     )
 
@@ -80,7 +80,7 @@ def MainMenu():
 
 @route(Common.PREFIX + '/news')
 def ShowNews():
-    page = GetPage('/').xpath(
+    page = Common.GetPage('/').xpath(
         '//div[@id="gkHeaderheader1"]//div[@class="custom"]/div'
     )
     if not page:
@@ -98,7 +98,7 @@ def ShowNews():
 
 @route(Common.PREFIX + '/popular')
 def ShowPopular():
-    page = GetPage('/popular.html').xpath(
+    page = Common.GetPage('/popular.html').xpath(
         '//div[contains(@class, "nspArts")]//div[contains(@class, "nspArt")]/div'
     )
     if not page:
@@ -119,7 +119,7 @@ def ShowPopular():
 
 @route(Common.PREFIX + '/category')
 def ShowCategory(path, title, show_items=False):
-    page = GetPage(path)
+    page = Common.GetPage(path)
 
     if not page:
         return ContentNotFound()
@@ -185,7 +185,7 @@ def ShowCategory(path, title, show_items=False):
 
 
 @route(Common.PREFIX + '/info')
-def ShowInfo(path):
+def ShowInfo(path, **kwargs):
 
     info = ParsePage(path)
     if not info:
@@ -214,7 +214,7 @@ def Seasons(path):
 
     oc = ObjectContainer(
         title2=data['title'],
-        content=ContainerContent.Seasons
+        content=ContainerContent.Seasons,
     )
     seasons = data['seasons'].keys()
 
@@ -283,6 +283,7 @@ def Episodes(path, season):
 @route(Common.HDSERIALS_META_ROUTE)
 def GetMeta(path, episode):
     episode = int(episode)
+
     item = ParsePage(path)
     if episode and episode != item['current_episode']:
         item = UpdateItemInfo(item, item['current_season'], episode)
@@ -312,7 +313,7 @@ def ParsePage(path):
             Log.Debug('Return from cache %s' % path)
             return ret
 
-    page = GetPage(path).xpath(
+    page = Common.GetPage(path).xpath(
         '//div[@id="k2Container"]'
     )[0]
 
@@ -464,16 +465,3 @@ def UpdateItemInfo(item, season, episode):
     Data.SaveObject('parse_cache', item)
 
     return item
-
-
-def GetPage(uri, cacheTime=CACHE_1HOUR):
-    try:
-        if Common.HDSERIALS_URL not in uri:
-            uri = Common.HDSERIALS_URL+uri
-
-        res = HTML.ElementFromURL(uri, cacheTime=cacheTime)
-        HTTP.Headers['Referer'] = uri
-    except:
-        res = HTML.Element('error')
-
-    return res

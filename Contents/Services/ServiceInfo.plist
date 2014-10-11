@@ -12,5 +12,13 @@
 			</array>
 		</dict>
 	</dict>
+	<key>Search</key>
+	<dict>
+		<key>HDSerials</key>
+		<dict>
+			<key>Identifier</key>
+			<string>com.plexapp.plugins.hdserials</string>
+		</dict>
+	</dict>
 </dict>
 </plist>
