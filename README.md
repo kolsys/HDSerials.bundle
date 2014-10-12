@@ -16,7 +16,7 @@
 
 Установка
 -------
-Плагин можно установить при помощи плагиня [UnSupported AppStore](https://forums.plex.tv/index.php/topic/25523-unsupported-as-in-totally-unofficial-appstore/) или [вручную](https://support.plex.tv/hc/en-us/articles/201187656-How-do-I-manually-install-a-channel-).
+Плагин можно установить при помощи плагина [UnSupported AppStore](https://forums.plex.tv/index.php/topic/25523-unsupported-as-in-totally-unofficial-appstore/) или [вручную](https://support.plex.tv/hc/en-us/articles/201187656-How-do-I-manually-install-a-channel-).
 
 
 Plex Media Server HDSerials video plugin
