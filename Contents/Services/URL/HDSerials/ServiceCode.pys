@@ -45,7 +45,7 @@ def MediaObjectsForURL(url):
         episode = None
         season = None
 
-        if item['url'] == variant['url']:
+        if item['url'] == variant['url'] and not url.episode:
             session = JSON.StringFromObject(variant['session'])
         else:
             url_update = variant['url']
