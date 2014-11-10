@@ -120,7 +120,14 @@ def GetPage(uri, cacheTime=CACHE_1HOUR):
         if HDSERIALS_URL not in uri:
             uri = HDSERIALS_URL+uri
 
-        res = HTML.ElementFromURL(uri, cacheTime=cacheTime)
+        res = HTML.ElementFromString(Regex(
+            '<style=[^>]+>([^:]+)',
+            Regex.MULTILINE
+        ).sub(
+            r'<span>\1</span>',
+            HTTP.Request(uri, cacheTime=cacheTime).content
+        ))
+
         HTTP.Headers['Referer'] = uri
     except:
         res = HTML.Element('error')
