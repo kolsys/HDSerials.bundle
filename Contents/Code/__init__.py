@@ -414,9 +414,6 @@ def ParsePage(path):
     ).group(1)) / 10
 
     if 'year' in data:
-        if '-' in data['year']:
-            data['year'] = data['year'].split('-')[0]
-
         data['year'] = int(data['year'])
 
     for k in data['variants']:
