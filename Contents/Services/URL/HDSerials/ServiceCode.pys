@@ -151,30 +151,38 @@ def Play(session, url, season, episode):
         raise Ex.MediaNotAvailable
 
     try:
-        res = HTTP.Request(res['manifest_m3u8']).content
-        Log.Debug('Found streams: %s' % res)
+        res = XML.ObjectFromURL(res['manifest_f4m']).xpath(
+            '/n:manifest/n:media',
+            namespaces={'n': 'http://ns.adobe.com/f4m/1.0'}
+        )
+
     except:
         raise Ex.MediaNotAvailable
 
-    res = [line for line in res.splitlines() if line].pop()
 
-    Log.Debug('Try to play %s' % res)
+    if not len(res):
+        raise Ex.MediaNotAvailable
 
-    res = Callback(Playlist, res=res)
+    stream_url = res[0].get('url').replace('/hds/tracks', '/hls/tracks')
+    playlist_url = '%s%s' % (
+        res[len(res)-1].get('url').replace('/hds/tracks', '/hls/tracks'),
+        'index.m3u8'
+    )
+
+    Log.Debug('Try to play %s with stream %s' % (playlist_url, stream_url))
+
+    res = Callback(Playlist, stream=stream_url, playlist=playlist_url)
 
     return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(res))
 
 
-def Playlist(res):
+def Playlist(playlist, stream):
 
     # Some players does not support gziped response
-    Log.Debug('Modify playlist %s' % res)
+    Log.Debug('Modify playlist %s' % playlist)
 
-    path = res.replace('tracks-2,4', 'tracks-1,4').split('/')
-    path.pop()
-    path = '/'.join(path)
     try:
-        res = HTTP.Request(res).content.splitlines()
+        res = HTTP.Request(playlist).content.splitlines()
     except:
         raise Ex.MediaNotAvailable
 
@@ -182,7 +190,7 @@ def Playlist(res):
         if res[i] == '#EXT-X-ENDLIST':
             break
         if res[i][:1] != '#':
-            res[i] = path + '/' + res[i]
+            res[i] = stream + '/' + res[i]
 
     return "\n".join(res)
 

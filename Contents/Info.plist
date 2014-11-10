@@ -14,7 +14,7 @@
 	<key>CFBundleSignature</key>
 	<string>hook</string>
 	<key>CFBundleVersion</key>
-	<string>1.01</string>
+	<string>1.03</string>
 	<key>PlexClientPlatforms</key>
 	<string>*</string>
 	<key>PlexFrameworkVersion</key>
