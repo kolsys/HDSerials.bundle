@@ -88,9 +88,29 @@ def ShowNews():
 
     oc = ObjectContainer(title2=u'Новые серии')
     for item in page:
+        title = u'%s' % item.text_content()
+        try:
+            info = Common.ParseNewsTitle(title)
+            title = u'%s - S%dE%d (%s)' % (
+                info['title'],
+                int(info['season']),
+                int(info['episode']),
+                info['date']
+            )
+            season = info['season']
+            episode = info['episode']
+        except:
+            season = None
+            episode = None
+            pass
         oc.add(DirectoryObject(
-            key=Callback(ShowInfo, path=item.find('a').get('href')),
-            title=item.text_content()
+            key=Callback(
+                ShowInfo,
+                path=item.find('a').get('href'),
+                season=season,
+                episode=episode,
+            ),
+            title=title
         ))
 
     return oc
@@ -192,6 +212,9 @@ def ShowInfo(path, **kwargs):
         return ContentNotFound()
 
     if 'seasons' in info:
+        if 'season' in kwargs and kwargs['season'] in info['seasons']:
+            return Episodes(info['path'], kwargs['season'])
+
         return Seasons(info['path'])
 
     try:
