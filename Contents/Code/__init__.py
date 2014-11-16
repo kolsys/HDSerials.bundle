@@ -75,6 +75,11 @@ def MainMenu():
             title=title
         ))
 
+    oc.add(InputDirectoryObject(
+        key=Callback(Search),
+        title=u'Поиск', prompt=u'Искать на HDSerials'
+    ))
+
     return oc
 
 
@@ -301,6 +306,15 @@ def Episodes(path, season):
         oc.add(Common.GetVideoObject(data, episode))
 
     return oc
+
+
+@route(Common.PREFIX + '/search')
+def Search(query):
+    return SearchService.Query(
+        query=query,
+        identifier=Plugin.Identifier,
+        name='HDSerials'
+    )
 
 
 @route(Common.HDSERIALS_META_ROUTE)
