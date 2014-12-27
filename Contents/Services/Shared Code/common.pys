@@ -144,8 +144,8 @@ def InitMetaUrl(url):
             return url
     except:
 
-        # Fetch there
-        res = url.split('||')
+        # Fetch there. Replace - Samsung-TV crutch
+        res = url.replace('%7C%7C', '||').split('||')
         res.reverse()
 
         path = res.pop()
