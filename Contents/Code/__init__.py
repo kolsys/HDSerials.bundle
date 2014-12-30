@@ -308,7 +308,6 @@ def Episodes(path, season):
     return oc
 
 
-@route(Common.PREFIX + '/search')
 def Search(query):
     return SearchService.Query(
         query=query,
