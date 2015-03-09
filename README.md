@@ -8,6 +8,7 @@
 - Просмотр фильмов, сериалов и телеперадач. Поддерживается описание и рейтинг.
 - Несколько вариантов переводов
 - Поиск
+- История просмотров
 
 Известные проблемы
 -------
@@ -29,6 +30,7 @@ Features
 - Support movies and tv-show contents with description and site rating
 - Support content with few translations
 - Support search
+- History
 
 Known issues
 -------

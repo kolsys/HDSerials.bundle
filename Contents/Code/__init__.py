@@ -25,11 +25,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from urllib import urlencode
-from datetime import date
-
 Common = SharedCodeService.common
-
 
 def Start():
     HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (X11; Linux i686; rv:32.0) Gecko/20100101 Firefox/32.0'
@@ -79,6 +75,10 @@ def MainMenu():
         key=Callback(Search),
         title=u'Поиск', prompt=u'Искать на HDSerials'
     ))
+    oc.add(DirectoryObject(
+        key=Callback(History),
+        title=u'История'
+    ))
 
     return oc
 
@@ -112,8 +112,7 @@ def ShowNews():
             key=Callback(
                 ShowInfo,
                 path=item.find('a').get('href'),
-                season=season,
-                episode=episode,
+                season=season
             ),
             title=title
         ))
@@ -209,12 +208,40 @@ def ShowCategory(path, title, show_items=False):
     return oc
 
 
+@route(Common.PREFIX + '/history')
+def History():
+    history = Data.LoadObject(Common.KEY_HISTORY)
+
+    if not history or not len(history):
+        return ContentNotFound()
+
+    oc = ObjectContainer(title2=u'История')
+
+    for item in sorted(
+        history.values(),
+        key=lambda k: k['time'],
+        reverse=True
+    ):
+        oc.add(DirectoryObject(
+            key=Callback(
+                ShowInfo,
+                path=item['path']
+            ),
+            title=u'%s' % item['title'],
+            thumb=item['thumb']
+        ))
+
+    return oc
+
+
 @route(Common.PREFIX + '/info')
 def ShowInfo(path, **kwargs):
 
     info = ParsePage(path)
     if not info:
         return ContentNotFound()
+
+    PushToHistory(info)
 
     if 'seasons' in info:
         if 'season' in kwargs and kwargs['season'] in info['seasons']:
@@ -343,8 +370,8 @@ def ParsePage(path):
     if Common.HDSERIALS_URL not in path:
         path = Common.HDSERIALS_URL+path
 
-    if Data.Exists('parse_cache'):
-        ret = Data.LoadObject('parse_cache')
+    if Data.Exists(Common.KEY_CACHE):
+        ret = Data.LoadObject(Common.KEY_CACHE)
         if ret and 'path' in ret and ret['path'] == path:
             Log.Debug('Return from cache %s' % path)
             return ret
@@ -467,7 +494,7 @@ def ParsePage(path):
             data['episodes'] = data['variants']
 
     ret.update(data)
-    Data.SaveObject('parse_cache', ret)
+    Data.SaveObject(Common.KEY_CACHE, ret)
 
     return ret
 
@@ -501,6 +528,33 @@ def UpdateItemInfo(item, season, episode):
     del update['seasons']
     item.update(update)
 
-    Data.SaveObject('parse_cache', item)
+    Data.SaveObject(Common.KEY_CACHE, item)
 
     return item
+
+
+def PushToHistory(item):
+    history = Data.LoadObject(Common.KEY_HISTORY)
+
+    if not history:
+        history = {}
+
+    history[item['path']] = {
+        'path': item['path'],
+        'title': item['title'],
+        'thumb': item['thumb'],
+        'time': Datetime.TimestampFromDatetime(Datetime.Now()),
+    }
+
+    # Trim old items
+    if len(history) > Common.HISTORY_SIZE:
+        items = sorted(
+            history.values(),
+            key=lambda k: k['time'],
+            reverse=True
+        )[:Common.HISTORY_SIZE]
+        history = {}
+        for item in items:
+            history[item['path']] = item
+
+    Data.SaveObject(Common.KEY_HISTORY, history)
