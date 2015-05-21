@@ -86,7 +86,7 @@ def GetInfoByURL(url, parent=None):
         ).content
     except Ex.HTTPError, e:
         Log.Debug(e.hdrs)
-        Log.Debug(e.msg)
+        Log(e.msg)
         return None
 
     data = Regex(
@@ -96,9 +96,11 @@ def GetInfoByURL(url, parent=None):
     if not data:
         return None
 
+    data = data.group(1).replace('condition_detected ? 1 : ', '')
+
     ret = {
         'url': parent if parent else url,
-        'session': JSON.ObjectFromString('{%s}' % data.group(1)),
+        'session': JSON.ObjectFromString('{%s}' % data),
     }
 
     if ret['session']['content_type'] == 'serial':

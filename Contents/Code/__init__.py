@@ -25,7 +25,9 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from updater import Updater
 Common = SharedCodeService.common
+
 
 def Start():
     HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (X11; Linux i686; rv:32.0) Gecko/20100101 Firefox/32.0'
@@ -54,6 +56,8 @@ def MainMenu():
         )
 
     oc = ObjectContainer(title2=L(Common.TITLE), no_cache=True)
+
+    Updater(Common.PREFIX+'/update', oc)
 
     oc.add(DirectoryObject(
         key=Callback(ShowNews),
