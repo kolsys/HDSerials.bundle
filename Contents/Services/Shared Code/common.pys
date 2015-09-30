@@ -174,7 +174,8 @@ def InitMetaUrl(url):
             if res:
                 return url.update(res, episode)
 
-        except:
+        except Exception as e:
+            Log.Error(u'%s' % e)
             pass
 
     raise Ex.MediaNotAvailable
