@@ -141,8 +141,9 @@ def Play(session, url, season, episode):
         session = JSON.ObjectFromString(session)
 
     res = JSON.ObjectFromURL(
-        url='http://moonwalk.cc//sessions/create_session',
-        values=session,
+        url='http://moonwalk.cc/sessions/create_session',
+        values=session['values'],
+        headers=session['headers'],
         method='POST',
         cacheTime=0
     )

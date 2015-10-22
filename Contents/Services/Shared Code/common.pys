@@ -100,10 +100,23 @@ def GetInfoByURL(url, parent=None):
 
     ret = {
         'url': parent if parent else url,
-        'session': JSON.ObjectFromString('{%s}' % data),
+        'session': {
+            'values': JSON.ObjectFromString('{%s}' % data),
+            'headers': {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+        }
     }
 
-    if ret['session']['content_type'] == 'serial':
+    data = Regex(
+        ('xhr.setRequestHeader\([\'"](.+)[\'"],[ ]*[\'"](.+)[\'"]\)')
+    ).findall(page, Regex.MULTILINE)
+
+    if data:
+        for k, v in data:
+            ret['session']['headers'][k] = v
+
+    if ret['session']['values']['content_type'] == 'serial':
         res = HTML.ElementFromString(page)
         ret['seasons'] = {}
         ret['episodes'] = {}
