@@ -103,7 +103,9 @@ def GetInfoByURL(url, parent=None):
         'session': {
             'values': JSON.ObjectFromString('{%s}' % data),
             'headers': {
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'Referer': url,
+                'Cookie': HTTP.CookiesForURL(url)
             },
         }
     }
