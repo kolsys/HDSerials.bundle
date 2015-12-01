@@ -81,7 +81,7 @@ def GetInfoByURL(url, parent=None):
     try:
         page = HTTP.Request(
             url,
-            cacheTime=CACHE_1HOUR,
+            cacheTime=300,
             headers=headers
         ).content
     except Ex.HTTPError, e:
@@ -117,6 +117,15 @@ def GetInfoByURL(url, parent=None):
     if data:
         for k, v in data:
             ret['session']['headers'][k] = v
+
+    data = Regex(
+        ('setRequestHeader\|([^|]+)')
+    ).search(page, Regex.MULTILINE)
+
+    if data:
+        ret['session']['headers']['Content-Data'] = String.Base64Encode(
+            data.group(1)
+        )
 
     if ret['session']['values']['content_type'] == 'serial':
         res = HTML.ElementFromString(page)
