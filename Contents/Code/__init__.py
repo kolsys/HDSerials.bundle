@@ -401,7 +401,6 @@ def ParsePage(path):
                     if 'seasons' in variant:
                         data['seasons'].update(variant['seasons'])
 
-
         if len(data['variants']) == 0:
             return None
     except:

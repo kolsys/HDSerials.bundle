@@ -90,7 +90,7 @@ def GetInfoByURL(url, parent=None):
         return None
 
     data = Regex(
-        ('\$\.post\(\'/sessions\/create_session\', {((?:.|\n)+)}\)\.success')
+        ('\$\.post\(\'/sessions\/create_new\', {((?:.|\n)+)}\)\.success')
     ).search(page, Regex.MULTILINE)
 
     if not data:
@@ -111,19 +111,18 @@ def GetInfoByURL(url, parent=None):
     }
 
     data = Regex(
-        ('xhr.setRequestHeader\([\'"](.+)[\'"],[ ]*[\'"](.+)[\'"]\)')
-    ).findall(page, Regex.MULTILINE)
-
-    if data:
-        for k, v in data:
-            ret['session']['headers'][k] = v
-
-    data = Regex(
-        ('setRequestHeader\|([^|]+)')
+        ('<meta[^>]+name="csrf-token"[^>]+content="([^"]+)"')
     ).search(page, Regex.MULTILINE)
 
     if data:
-        ret['session']['headers']['Content-Data'] = String.Base64Encode(
+        ret['session']['headers']['X-CSRF-Token'] = data.group(1)
+
+    data = Regex(
+        ('setRequestHeader\|?\|([^|]+)')
+    ).search(page, Regex.MULTILINE)
+
+    if data:
+        ret['session']['headers']['Encoding-Pool'] = String.Base64Encode(
             data.group(1)
         )
 
