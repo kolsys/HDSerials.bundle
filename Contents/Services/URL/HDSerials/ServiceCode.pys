@@ -86,13 +86,13 @@ def MetadataObjectForURL(url):
     }
 
     for k in [
-        'summary', 'thumb', 'directors',
+        'summary', 'thumb',
+        'directors',
         'rating', 'duration',
         'originally_available_at',
     ]:
         if k in item and item[k]:
             kwargs[k] = item[k]
-
 
     if episode:
         if 'roles' in item:
@@ -141,7 +141,7 @@ def Play(session, url, season, episode):
         session = JSON.ObjectFromString(session)
 
     res = JSON.ObjectFromURL(
-        url='http://moonwalk.cc/sessions/create_new',
+        url='http://moonwalk.cc/sessions/new_session',
         values=session['values'],
         headers=session['headers'],
         method='POST',

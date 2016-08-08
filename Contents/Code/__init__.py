@@ -465,9 +465,13 @@ def ParsePage(path):
             else:
                 data[tmap[current]] = unicode(desc)
 
-    for current in ('countries', 'genres', 'directors', 'roles'):
+    for current in ('countries', 'genres'):
         if current in data:
             data[current] = [l.strip() for l in data[current].split(',')]
+
+    for current in ('directors', 'roles'):
+        if current in data:
+            data[current] = [{'name': l.strip()} for l in data[current].split(',')]
 
     # TODO
     data['duration'] = None

@@ -90,7 +90,7 @@ def GetInfoByURL(url, parent=None):
         return None
 
     data = Regex(
-        ('\$\.post\(\'/sessions\/create_new\', {((?:.|\n)+)}\)\.success')
+        ('\$\.post\(session_url, {((?:.|\n)+)}\)\.success')
     ).search(page, Regex.MULTILINE)
 
     if not data:
