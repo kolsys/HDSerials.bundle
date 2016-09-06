@@ -26,6 +26,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import urllib
+import os
 
 PREFIX = '/video/hdserials'
 HDSERIALS_URL = 'http://www.hdserials.tv'
@@ -189,7 +190,8 @@ def InitMetaUrl(url):
                     HDSERIALS_META_ROUTE,
                     urllib.urlencode({
                         'path': path,
-                        'episode': episode
+                        'episode': episode,
+                        'X-Plex-Token': os.environ['PLEXTOKEN'] if 'PLEXTOKEN' in os.environ else None
                     })
                 )
             ).read())

@@ -152,7 +152,7 @@ def Play(session, url, season, episode):
         raise Ex.MediaNotAvailable
 
     try:
-        res = HTTP.Request(res['manifest_m3u8']).content
+        res = HTTP.Request(res['mans']['manifest_m3u8']).content
         Log.Debug('Found streams: %s' % res)
     except:
         raise Ex.MediaNotAvailable
