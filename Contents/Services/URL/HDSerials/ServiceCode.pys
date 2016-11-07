@@ -166,7 +166,7 @@ def Play(session, url, season, episode):
     return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(res))
 
 
-def Playlist(res):
+def Playlist(res, **kwargs):
 
     # Some players does not support gziped response
     Log.Debug('Modify playlist %s' % res)
