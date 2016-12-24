@@ -117,7 +117,7 @@ def GetInfoByURL(url, parent=None):
 
     if data:
         ret['session']['headers']['X-CSRF-Token'] = data.group(1)
-        ret['session']['headers']['X-Data-Pool'] = 'Stream'
+        ret['session']['headers']['X-Iframe-Option'] = 'Direct'
 
     data = Regex(
         ('setRequestHeader\|?\|([^|]+)')
