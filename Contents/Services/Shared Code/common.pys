@@ -91,7 +91,7 @@ def GetInfoByURL(url, parent=None):
         return None
 
     data = Regex(
-        ('\$\.post\(session_url, {((?:.|\n)+)}\)\.success')
+        ('var session_params = {((?:[^}]|\n)+)};')
     ).search(page, Regex.MULTILINE)
 
     if not data:
@@ -117,16 +117,14 @@ def GetInfoByURL(url, parent=None):
 
     if data:
         ret['session']['headers']['X-CSRF-Token'] = data.group(1)
-        ret['session']['headers']['X-Iframe-Option'] = 'Direct'
+        ret['session']['headers']['X-Var-Document'] = 'String'
 
     data = Regex(
-        ('setRequestHeader\|?\|([^|]+)')
+        ('var varb1 = \'([^\']+)\';')
     ).search(page, Regex.MULTILINE)
 
     if data:
-        ret['session']['headers']['Encoding-Pool'] = String.Base64Encode(
-            data.group(1)
-        )
+        ret['session']['values']['varb1'] = data.group(1)
 
     if ret['session']['values']['content_type'] == 'serial':
         res = HTML.ElementFromString(page)
