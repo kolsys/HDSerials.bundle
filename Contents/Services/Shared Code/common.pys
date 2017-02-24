@@ -61,7 +61,7 @@ def GetEpisodeURL(url, season, episode):
 
 
 def GetInfoByURL(url, parent=None):
-    if not Regex('http://moonwalk\.cc/').match(url):
+    if not url.startswith('http://moonwalk.cc/'):
         return {
             'url': url.replace('vkontakte.ru', 'vk.com'),
             'session': 'external',
@@ -91,7 +91,7 @@ def GetInfoByURL(url, parent=None):
         return None
 
     data = Regex(
-        ('var session_params = {((?:[^}]|\n)+)};')
+        ('var banners_script_clickunder = {((?:[^}]|\n)+)};')
     ).search(page, Regex.MULTILINE)
 
     if not data:
@@ -107,7 +107,7 @@ def GetInfoByURL(url, parent=None):
                 'X-Requested-With': 'XMLHttpRequest',
                 'Referer': url,
                 'Cookie': HTTP.CookiesForURL(url)
-            },
+            }
         }
     }
 
@@ -117,14 +117,17 @@ def GetInfoByURL(url, parent=None):
 
     if data:
         ret['session']['headers']['X-CSRF-Token'] = data.group(1)
-        ret['session']['headers']['X-Var-Document'] = 'String'
+        ret['session']['headers']['X-Condition-Safe'] = 'Normal'
 
     data = Regex(
-        ('var varb1 = \'([^\']+)\';')
+        ('var version_control = \'([^\']+)\';')
     ).search(page, Regex.MULTILINE)
 
     if data:
-        ret['session']['values']['varb1'] = data.group(1)
+        ret['session']['values']['version_control'] = data.group(1)
+
+    if 'mw_key' in ret['session']['values']:
+        ret['session']['values']['mw_key'] = ret['session']['values']['mw_key'].replace('c', u'с', 1)
 
     if ret['session']['values']['content_type'] == 'serial':
         res = HTML.ElementFromString(page)

@@ -154,7 +154,10 @@ def Play(session, url, season, episode):
     try:
         res = HTTP.Request(res['mans']['manifest_m3u8']).content
         Log.Debug('Found streams: %s' % res)
-    except:
+    except Exception as e:
+        Log.Error(u'%s' % e)
+        Log.Debug(session)
+        Log.Debug(res)
         raise Ex.MediaNotAvailable
 
     res = [line for line in res.splitlines() if line].pop()

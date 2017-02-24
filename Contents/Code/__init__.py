@@ -30,7 +30,7 @@ Common = SharedCodeService.common
 
 
 def Start():
-    HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (X11; Linux i686; rv:32.0) Gecko/20100101 Firefox/32.0'
+    HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:51.0) Gecko/20100101 Firefox/51.0'
     DirectoryObject.art = R(Common.ART)
 
 
