@@ -111,23 +111,29 @@ def GetInfoByURL(url, parent=None):
         }
     }
 
+
     data = Regex(
         ('<meta[^>]+name="csrf-token"[^>]+content="([^"]+)"')
     ).search(page, Regex.MULTILINE)
 
     if data:
         ret['session']['headers']['X-CSRF-Token'] = data.group(1)
-        ret['session']['headers']['X-Condition-Safe'] = 'Normal'
-
     data = Regex(
-        ('var version_control = \'([^\']+)\';')
+        ('\'X-Mega-Version\': ?\'([0-9]+)\'')
     ).search(page, Regex.MULTILINE)
 
     if data:
-        ret['session']['values']['version_control'] = data.group(1)
+        ret['session']['headers']['X-Mega-Version'] = data.group(1)
 
-    if 'mw_key' in ret['session']['values']:
-        ret['session']['values']['mw_key'] = ret['session']['values']['mw_key'].replace('c', u'с', 1)
+    data = Regex(
+        ('var detect_true = \'([^\']+)\';')
+    ).search(page, Regex.MULTILINE)
+
+    if data:
+        ret['session']['values']['detect_true'] = data.group(1)
+
+    # if 'mw_key' in ret['session']['values']:
+    #     ret['session']['values']['mw_key'] = ret['session']['values']['mw_key'].replace('c', u'с', 1)
 
     if ret['session']['values']['content_type'] == 'serial':
         res = HTML.ElementFromString(page)
