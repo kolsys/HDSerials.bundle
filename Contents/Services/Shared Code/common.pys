@@ -91,13 +91,13 @@ def GetInfoByURL(url, parent=None):
         return None
 
     data = Regex(
-        ('var banners_script_clickunder = {((?:[^}]|\n)+)};')
+        ('var post_method = {((?:[^}]|\n)+)};')
     ).search(page, Regex.MULTILINE)
 
     if not data:
         return None
 
-    data = data.group(1).replace('condition_detected ? 1 : ', '')
+    data = Regex(':\s*([^\']+?),').sub(':\'\\1\',', data.group(1))
 
     ret = {
         'url': parent if parent else url,
@@ -111,26 +111,29 @@ def GetInfoByURL(url, parent=None):
         }
     }
 
-
     data = Regex(
         ('<meta[^>]+name="csrf-token"[^>]+content="([^"]+)"')
     ).search(page, Regex.MULTILINE)
 
     if data:
         ret['session']['headers']['X-CSRF-Token'] = data.group(1)
+
     data = Regex(
-        ('\'X-Mega-Version\': ?\'([0-9]+)\'')
+        ('\'X-Format-Token\': ?\'([A-B0-9]+)\'')
     ).search(page, Regex.MULTILINE)
 
     if data:
-        ret['session']['headers']['X-Mega-Version'] = data.group(1)
+        ret['session']['headers']['X-Format-Token'] = data.group(1)
 
-    data = Regex(
-        ('var detect_true = \'([^\']+)\';')
-    ).search(page, Regex.MULTILINE)
+    for i in ('mw_key', 'async_method'):
+        data = Regex(
+            ('var '+i+' = \'([^\']+)\';')
+        ).search(page, Regex.MULTILINE)
 
-    if data:
-        ret['session']['values']['detect_true'] = data.group(1)
+        if data:
+            ret['session']['values'][i] = data.group(1)
+
+    ret['session']['values']['ad_attr'] = 0
 
     # if 'mw_key' in ret['session']['values']:
     #     ret['session']['values']['mw_key'] = ret['session']['values']['mw_key'].replace('c', u'с', 1)
