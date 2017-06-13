@@ -91,17 +91,27 @@ def GetInfoByURL(url, parent=None):
         return None
 
     data = Regex(
-        ('var post_method = {((?:[^}]|\n)+)};')
+        ('\'(/manifests/video[^\']+)\'')
+    ).search(page)
+
+    if not data:
+        return None
+
+    query = data.group(1)
+
+    data = Regex(
+        ('{((?:[^}]*mw_key\s*:[^}]+|\n)+)};')
     ).search(page, Regex.MULTILINE)
 
     if not data:
         return None
 
-    data = Regex(':\s*([^\']+?),').sub(':\'\\1\',', data.group(1))
+    data = Regex(':\s*([^\']+?)(?:,|$)').sub(':\'\\1\',', data.group(1))
 
     ret = {
         'url': parent if parent else url,
         'session': {
+            'query': query,
             'values': JSON.ObjectFromString('{%s}' % data),
             'headers': {
                 'X-Requested-With': 'XMLHttpRequest',
@@ -113,30 +123,33 @@ def GetInfoByURL(url, parent=None):
 
     data = Regex(
         ('<meta[^>]+name="csrf-token"[^>]+content="([^"]+)"')
-    ).search(page, Regex.MULTILINE)
+    ).search(page)
 
     if data:
         ret['session']['headers']['X-CSRF-Token'] = data.group(1)
 
     data = Regex(
-        ('\'X-Format-Token\': ?\'([A-B0-9]+)\'')
-    ).search(page, Regex.MULTILINE)
+        ('\'X-Access-Level\': ?\'([a-f0-9]+)\'')
+    ).search(page)
 
     if data:
-        ret['session']['headers']['X-Format-Token'] = data.group(1)
+        ret['session']['headers']['X-Access-Level'] = data.group(1)
 
     for i in ('mw_key', 'async_method'):
         data = Regex(
             ('var '+i+' = \'([^\']+)\';')
-        ).search(page, Regex.MULTILINE)
+        ).search(page)
 
         if data:
             ret['session']['values'][i] = data.group(1)
 
-    ret['session']['values']['ad_attr'] = 0
+    data = Regex('window\[.+\]\[([^\]]+)\]\s?=\s?([^;]+)').search(page)
+    if data:
+        ret['session']['values'][
+            data.group(1).replace('+', '').replace(' ', '').replace('\'', '')
+        ] = data.group(2).replace('+', '').replace(' ', '').replace('\'', '')
 
-    # if 'mw_key' in ret['session']['values']:
-    #     ret['session']['values']['mw_key'] = ret['session']['values']['mw_key'].replace('c', u'с', 1)
+    ret['session']['values']['ad_attr'] = 0
 
     if ret['session']['values']['content_type'] == 'serial':
         res = HTML.ElementFromString(page)

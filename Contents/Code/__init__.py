@@ -403,7 +403,8 @@ def ParsePage(path):
 
         if len(data['variants']) == 0:
             return None
-    except:
+    except Exception as e:
+        Log.Info(u'%s' % e)
         return None
 
     ret = {
