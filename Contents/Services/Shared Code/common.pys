@@ -60,6 +60,12 @@ def GetEpisodeURL(url, season, episode):
     return url
 
 
+def GetToken(item):
+    if 'serial_token' in item and item['serial_token'] is not None:
+        return item['serial_token']
+    return item['video_token']
+
+
 def GetInfoByURL(url, parent=None):
     if not url.startswith('http://moonwalk.cc/'):
         return {
@@ -91,83 +97,40 @@ def GetInfoByURL(url, parent=None):
         return None
 
     data = Regex(
-        ('\'(/manifests/video[^\']+)\'')
+        ('new VideoBalancer\(({(?:[^;]+)})\);')
     ).search(page)
 
     if not data:
         return None
 
-    query = data.group(1)
-
-    data = Regex(
-        ('{((?:[^}]*mw_key\s*:[^}]+|\n)+)};')
-    ).search(page, Regex.MULTILINE)
+    data = JSON.ObjectFromString(
+        Regex('encodeURIComponent\(([^\)]+)\)').sub('\\1', data.group(1))
+    )
 
     if not data:
         return None
 
-    data = Regex(':\s*([^\']+?)(?:,|$)').sub(':\'\\1\',', data.group(1))
-
-    ret = {
+    data.update({
         'url': parent if parent else url,
         'session': {
-            'query': query,
-            'values': JSON.ObjectFromString('{%s}' % data),
+            'query': '/manifests/video/' + data['video_token'] + '/all',
+            'values': {
+                'mw_key': '1ffd4aa558cc51f5a9fc6888e7bc5cb4',
+                'mw_pid': data['partner_id'],
+                'p_domain_id': data['domain_id'],
+                'ad_attr': 0,
+                'iframe_version': '2.1'
+            },
             'headers': {
                 'X-Requested-With': 'XMLHttpRequest',
+                'X-Access-Level': data['user_token'],
                 'Referer': url,
                 'Cookie': HTTP.CookiesForURL(url)
             }
         }
-    }
+    })
 
-    data = Regex(
-        ('<meta[^>]+name="csrf-token"[^>]+content="([^"]+)"')
-    ).search(page)
-
-    if data:
-        ret['session']['headers']['X-CSRF-Token'] = data.group(1)
-
-    data = Regex(
-        ('\'X-Access-Level\': ?\'([a-f0-9]+)\'')
-    ).search(page)
-
-    if data:
-        ret['session']['headers']['X-Access-Level'] = data.group(1)
-
-    for i in ('mw_key', 'async_method'):
-        data = Regex(
-            ('var '+i+' = \'([^\']+)\';')
-        ).search(page)
-
-        if data:
-            ret['session']['values'][i] = data.group(1)
-
-    data = Regex('window\[.+\]\[([^\]]+)\]\s?=\s?([^;]+)').search(page)
-    if data:
-        ret['session']['values'][
-            data.group(1).replace('+', '').replace(' ', '').replace('\'', '')
-        ] = data.group(2).replace('+', '').replace(' ', '').replace('\'', '')
-
-    ret['session']['values']['ad_attr'] = 0
-
-    if ret['session']['values']['content_type'] == 'serial':
-        res = HTML.ElementFromString(page)
-        ret['seasons'] = {}
-        ret['episodes'] = {}
-        for item in res.xpath('//select[@id="season"]/option'):
-            value = item.get('value')
-            ret['seasons'][value] = unicode(item.text_content())
-            if item.get('selected'):
-                ret['current_season'] = value
-
-        for item in res.xpath('//select[@id="episode"]/option'):
-            value = item.get('value')
-            ret['episodes'][value] = unicode(item.text_content())
-            if item.get('selected'):
-                ret['current_episode'] = value
-
-    return ret
+    return data
 
 
 def GetPage(uri, cacheTime=CACHE_1HOUR):

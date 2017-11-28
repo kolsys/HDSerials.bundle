@@ -229,7 +229,8 @@ def History():
         oc.add(DirectoryObject(
             key=Callback(
                 ShowInfo,
-                path=item['path']
+                path=item['path'],
+                translation=item['translation'] if 'translation' in item else None
             ),
             title=u'%s' % item['title'],
             thumb=item['thumb']
@@ -241,24 +242,57 @@ def History():
 @route(Common.PREFIX + '/info')
 def ShowInfo(path, **kwargs):
 
-    info = ParsePage(path)
-    if not info:
+    data = ParsePage(path)
+    if not data:
         return ContentNotFound()
 
-    PushToHistory(info)
+    PushToHistory(data)
 
-    if 'seasons' in info:
-        if 'season' in kwargs and kwargs['season'] in info['seasons']:
-            return Episodes(info['path'], kwargs['season'])
+    if 'translations' in data and data['translations'] is not None and len(data['translations']) > 1:
+        token = Common.GetToken(data)
+        if 'translation' in kwargs and kwargs['translation']:
+            if token != kwargs['translation']:
+                data['url'] = data['url'].replace(token, kwargs['translation'])
+                data = UpdateItemInfo(data, data['episode'][0], data['episode'][1])
+        else:
+            return Translations(data['path'])
 
-        return Seasons(info['path'])
+    if 'seasons' in data and data['seasons'] is not None:
+        if 'season' in kwargs and kwargs['season'] in data['seasons']:
+            return Episodes(data['path'], kwargs['season'])
+
+        return Seasons(data['path'])
 
     try:
-        vo = Common.GetVideoObject(info)
+        vo = Common.GetVideoObject(data)
     except:
         return ContentNotFound()
 
     return ObjectContainer(objects=[vo], content=ContainerContent.Movies)
+
+
+@route(Common.PREFIX + '/translations')
+def Translations(path):
+    data = ParsePage(path)
+    if not data:
+        return ContentNotFound()
+
+    oc = ObjectContainer(
+        title2=u'%s' % data['title'],
+        content=ContainerContent.Episodes
+    )
+
+    for translation in data['translations']:
+        oc.add(DirectoryObject(
+            key=Callback(
+                ShowInfo,
+                path=data['path'],
+                translation=translation[0]
+            ),
+            title=u'%s' % translation[1],
+            thumb=data['thumb']
+        ))
+    return oc
 
 
 @route(Common.PREFIX + '/seasons')
@@ -269,16 +303,14 @@ def Seasons(path):
         return ContentNotFound()
 
     if len(data['seasons']) == 1:
-        return Episodes(path, data['current_season'])
+        return Episodes(path, data['episode'][0])
 
     oc = ObjectContainer(
         title2=data['title'],
         content=ContainerContent.Seasons,
     )
-    seasons = data['seasons'].keys()
 
-    seasons.sort(key=lambda k: int(k))
-    for season in seasons:
+    for season in data['seasons']:
         oc.add(SeasonObject(
             key=Callback(
                 Episodes,
@@ -287,7 +319,7 @@ def Seasons(path):
             ),
             rating_key=Common.GetEpisodeURL(data['url'], season, 0),
             index=int(season),
-            title=data['seasons'][season],
+            title=u'%d Сезон' % season,
             source_title=L(Common.TITLE),
             thumb=data['thumb'],
             # summary=data['summary']
@@ -305,36 +337,18 @@ def Episodes(path, season):
     if not data:
         return ContentNotFound()
 
-    if data['session'] == 'external':
-        oc = ObjectContainer(
-            title2=u'%s' % data['title'],
-            content=ContainerContent.Episodes
-        )
-        for episode in data['episodes']:
-            Log.Debug('Try to get metadata from external: %s' % episode)
-            try:
-                oc.add(URLService.MetadataObjectForURL(
-                    data['episodes'][episode]['url']
-                ))
-            except:
-                continue
-        return oc if len(oc) else ContentNotFound()
-
-    if season != data['current_season']:
+    if season != data['episode'][0]:
         data = UpdateItemInfo(data, season, 1)
         if not data:
             return ContentNotFound()
 
     oc = ObjectContainer(
-        title2=u'%s / %s' % (data['title'], data['seasons'][season]),
+        title2=u'%s / %s' % (data['title'], data['episode'][0]),
         content=ContainerContent.Episodes
     )
 
-    episodes = data['episodes'].keys()
-    episodes.sort(key=lambda k: int(k))
-
-    for episode in episodes:
-        oc.add(Common.GetVideoObject(data, episode))
+    for episode in data['episodes']:
+        oc.add(Common.GetVideoObject(data, episode[1]))
 
     return oc
 
@@ -352,8 +366,8 @@ def GetMeta(path, episode):
     episode = int(episode)
 
     item = ParsePage(path)
-    if episode and episode != item['current_episode']:
-        item = UpdateItemInfo(item, item['current_season'], episode)
+    if episode and episode != item['episode'][1]:
+        item = UpdateItemInfo(item, item['episode'][0], episode)
 
     return JSON.StringFromObject(item)
 
@@ -384,25 +398,21 @@ def ParsePage(path):
         '//div[@id="k2Container"]'
     )[0]
 
-    data = {'variants': {}}
+    data = {}
     try:
-        for url in page.xpath(
+        url = page.xpath(
             '//div[@class="itemFullText"]//iframe[@src]'
-        ):
-            Log.Debug('Found variant %s', url)
-            variant = Common.GetInfoByURL(url.get('src'))
-            if variant:
-                data['variants'][variant['url']] = variant
-                if 'session' not in data:
-                    data.update(variant)
-                    if 'seasons' in data:
-                        data['seasons'] = variant['seasons'].copy()
-                else:
-                    if 'seasons' in variant:
-                        data['seasons'].update(variant['seasons'])
+        )[0]
 
-        if len(data['variants']) == 0:
+        Log.Debug('Found variant %s', url)
+
+        info = Common.GetInfoByURL(url.get('src'))
+
+        if info:
+            data.update(info)
+        else:
             return None
+
     except Exception as e:
         Log.Info(u'%s' % e)
         return None
@@ -445,14 +455,8 @@ def ParsePage(path):
     }
 
     current = None
-    variants_names = []
     for desc in meta:
-        if not isinstance(desc, basestring):
-            if desc.tag == 'p' and u'Перевод' in desc.text_content():
-                variants_names.append(desc.text_content())
-                current = None
-            continue
-        if not desc:
+        if not isinstance(desc, basestring) or not desc:
             continue
 
         if desc in tmap:
@@ -490,17 +494,6 @@ def ParsePage(path):
 
         data['year'] = int(data['year'])
 
-    for k in data['variants']:
-        data['variants'][k]['variant_title'] = unicode(
-            variants_names.pop(0)
-        ) if variants_names else ''
-
-    if data['session'] == 'external':
-        if len(data['variants']) > 1:
-            data['seasons'] = {'1': ret['title']}
-            data['current_season'] = 1
-            data['episodes'] = data['variants']
-
     ret.update(data)
     Data.SaveObject(Common.KEY_CACHE, ret)
 
@@ -511,29 +504,15 @@ def UpdateItemInfo(item, season, episode):
     url = item['url']
     season = str(season)
 
-    if season not in item['variants'][url]['seasons']:
-        # Try to search variant with season
-        for variant in item['variants'].values():
-            if season in variant['seasons']:
-                url = variant['url']
-                if int(season) == variant['current_season'] and int(episode) == variant['current_episode']:
-                    update = variant.copy()
-                    del update['seasons']
-                    item.update(update)
-                    return item
-                break
-
     update = Common.GetInfoByURL(Common.GetEpisodeURL(
         url,
         season,
         episode
     ), url)
+
     if not update:
         return None
 
-    item['variants'][url].update(update.copy())
-
-    del update['seasons']
     item.update(update)
 
     Data.SaveObject(Common.KEY_CACHE, item)
@@ -552,6 +531,7 @@ def PushToHistory(item):
         'title': item['title'],
         'thumb': item['thumb'],
         'time': Datetime.TimestampFromDatetime(Datetime.Now()),
+        'translation': Common.GetToken(item)
     }
 
     # Trim old items

@@ -31,33 +31,24 @@ import common as Common
 def MediaObjectsForURL(url):
     url = Common.InitMetaUrl(url)
     item = url.item
-    ret = []
 
-    for variant in item['variants'].values():
-        if url.episode and (
-            str(item['current_season']) not in variant['seasons']
-            or str(url.episode) not in variant['episodes']
-        ):
-            continue
+    session = None
+    episode = None
+    season = None
 
-        session = None
-        url_update = None
-        episode = None
-        season = None
+    if not url.episode:
+        session = JSON.StringFromObject(item['session'])
+    else:
+        if url.episode:
+            season = item['episode'][0]
+            episode = url.episode
 
-        if item['url'] == variant['url'] and not url.episode:
-            session = JSON.StringFromObject(variant['session'])
-        else:
-            url_update = variant['url']
-            if url.episode:
-                season = item['current_season']
-                episode = url.episode
-
-        ret.append(MediaObject(
+    return [
+        MediaObject(
             parts=[PartObject(
                 key=Callback(
                     Play,
-                    url=url_update,
+                    url=item['url'],
                     season=season,
                     episode=episode,
                     session=session
@@ -69,9 +60,8 @@ def MediaObjectsForURL(url):
             audio_codec=AudioCodec.AAC,
             optimized_for_streaming=True,
             audio_channels=2
-        ))
-
-    return ret
+        )
+    ]
 
 
 def MetadataObjectForURL(url):
@@ -101,11 +91,11 @@ def MetadataObjectForURL(url):
         obj = EpisodeObject(
             rating_key=Common.GetEpisodeURL(
                 item['url'],
-                item['current_season'],
+                item['episode'][0],
                 episode
             ),
-            title=item['episodes'][str(episode)],
-            season=int(item['current_season']),
+            title=u'%d серия' % episode,
+            season=int(item['episode'][0]),
             index=int(episode),
             show=item['title'],
             **kwargs
