@@ -60,11 +60,15 @@ def MainMenu():
     Updater(Common.PREFIX+'/update', oc)
 
     oc.add(DirectoryObject(
-        key=Callback(ShowNews),
-        title=u'Новые серии'
+        key=Callback(
+            ShowFeed,
+            path='/serialy/serialy-onlajn-novinki.html',
+            title=u'Новинки сериалов'
+        ),
+        title=u'Новинки сериалов'
     ))
     oc.add(DirectoryObject(
-        key=Callback(ShowPopular),
+        key=Callback(ShowFeed, path='/popular.html', title=u'Популярное'),
         title=u'Популярное'
     ))
 
@@ -87,46 +91,9 @@ def MainMenu():
     return oc
 
 
-@route(Common.PREFIX + '/news')
-def ShowNews():
-    page = Common.GetPage('/').xpath(
-        '//div[@id="gkHeaderheader1"]//div[@class="custom"]/div'
-    )
-    if not page:
-        return ContentNotFound()
-
-    oc = ObjectContainer(title2=u'Новые серии')
-    for item in page:
-        title = u'%s' % item.text_content()
-        try:
-            info = Common.ParseNewsTitle(title)
-            title = u'%s - S%dE%d (%s)' % (
-                info['title'],
-                int(info['season']),
-                int(info['episode']),
-                info['date']
-            )
-            season = info['season']
-            episode = info['episode']
-        except:
-            season = None
-            episode = None
-            pass
-        oc.add(DirectoryObject(
-            key=Callback(
-                ShowInfo,
-                path=item.find('a').get('href'),
-                season=season
-            ),
-            title=title
-        ))
-
-    return oc
-
-
-@route(Common.PREFIX + '/popular')
-def ShowPopular():
-    page = Common.GetPage('/popular.html').xpath(
+@route(Common.PREFIX + '/feed')
+def ShowFeed(path, title):
+    page = Common.GetPage(path).xpath(
         '//div[contains(@class, "nspArts")]//div[contains(@class, "nspArt")]/div'
     )
     if not page:

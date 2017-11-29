@@ -193,14 +193,6 @@ def InitMetaUrl(url):
     raise Ex.MediaNotAvailable
 
 
-def ParseNewsTitle(title):
-    return Regex(
-        u'(?P<date>\d{2}\.\d{2}\.\d{4})\sДобавлена'
-        u'\s(?P<episode>\d+)\sсерия\sсериала\s(?P<title>.+)'
-        u'\s(?P<season>\d+)\sсезон'
-    ).match(title).groupdict()
-
-
 class MetaUrl(str):
     item = None
     episode = None
