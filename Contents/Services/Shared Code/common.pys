@@ -27,6 +27,7 @@
 
 import urllib
 import os
+from string import Template
 
 PREFIX = '/video/hdserials'
 HDSERIALS_URL = 'http://www.hdserials.tv'
@@ -86,49 +87,80 @@ def GetInfoByURL(url, parent=None):
         headers['Referer'] = HTTP.Headers['Referer']
 
     try:
-        page = HTTP.Request(
+        page = HTML.ElementFromURL(
             url,
             cacheTime=300,
             headers=headers
-        ).content
+        )
     except Ex.HTTPError, e:
         Log.Debug(e.hdrs)
         Log(e.msg)
         return None
 
-    data = Regex(
-        ('new VideoBalancer\(({(?:[^;]+)})\);')
-    ).search(page)
+    data = {}
+    values = None
 
-    if not data:
+    for script in page.xpath('//script'):
+        src = script.text_content()
+
+        search = Regex(
+            ('new VideoBalancer\(({(?:[^;]+)})\);')
+        ).search(src)
+
+        if search:
+            data.update(JSON.ObjectFromString(
+                Regex('encodeURIComponent\(([^\)]+)\)').sub('\\1', search.group(1))
+            ))
+            continue
+
+        search = Regex(
+            ('window\.([a-f0-9]+)\s*=\s*\'([a-f0-9]+)\'')
+        ).search(src)
+
+        if search:
+            data[search.group(1)] = search.group(2)
+            continue
+
+        src = script.get('src')
+        if src:
+            try:
+                values = Regex(
+                    ('({[^{]+p_domain_id[^}]+})')
+                ).search(
+                    HTTP.Request('http://moonwalk.cc'+src, cacheTime=CACHE_1HOUR).content
+                ).group(1)
+
+            except:
+                continue
+
+    if not data or not values:
         return None
 
-    data = JSON.ObjectFromString(
-        Regex('encodeURIComponent\(([^\)]+)\)').sub('\\1', data.group(1))
-    )
-
-    if not data:
+    try:
+        values = Template(
+            Regex(':[^:,"]+\.([^\.,}"]+)').sub(':"$\\1"', values)
+        ).substitute(data)
+        values = JSON.ObjectFromString(values)
+    except:
+        Log.Debug(value)
+        Log(e.msg)
         return None
 
     data.update({
         'url': parent if parent else url,
         'session': {
             'query': '/manifests/video/' + data['video_token'] + '/all',
-            'values': {
-                'mw_key': '1ffd4aa558cc51f5a9fc6888e7bc5cb4',
-                'mw_pid': data['partner_id'],
-                'p_domain_id': data['domain_id'],
-                'ad_attr': 0,
-                'iframe_version': '2.1'
-            },
+            'values': values,
             'headers': {
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-Access-Level': data['user_token'],
                 'Referer': url,
                 'Cookie': HTTP.CookiesForURL(url)
             }
         }
     })
+
+    if 'user_token' in data:
+        data['session']['headers']['X-Access-Level'] = data['user_token']
 
     return data
 
