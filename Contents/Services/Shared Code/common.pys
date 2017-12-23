@@ -99,6 +99,8 @@ def GetInfoByURL(url, parent=None):
 
     data = {}
     values = None
+    token = None
+    source = None
 
     for script in page.xpath('//script'):
         src = script.text_content()
@@ -114,26 +116,26 @@ def GetInfoByURL(url, parent=None):
             continue
 
         search = Regex(
-            ('window\.([a-f0-9]+)\s*=\s*\'([a-f0-9]+)\'')
+            ('window(?:\[(?:"|\')|\.)([a-f0-9]+)(?:(?:\'|")\])?\s*=\s*\'([a-f0-9]+)\'')
         ).search(src)
 
         if search:
-            data[search.group(1)] = search.group(2)
+            token = search.group(1)
+            data[token] = search.group(2)
             continue
 
         src = script.get('src')
         if src:
             try:
+                source = HTTP.Request('http://moonwalk.cc'+src, cacheTime=CACHE_1HOUR).content
                 values = Regex(
                     ('({[^{]+p_domain_id[^}]+})')
-                ).search(
-                    HTTP.Request('http://moonwalk.cc'+src, cacheTime=CACHE_1HOUR).content
-                ).group(1)
+                ).search(source).group(1)
 
             except:
                 continue
 
-    if not data or not values:
+    if not data or not values or not token:
         return None
 
     try:
@@ -141,8 +143,14 @@ def GetInfoByURL(url, parent=None):
             Regex(':[^:,"]+\.([^\.,}"]+)').sub(':"$\\1"', values)
         ).substitute(data)
         values = JSON.ObjectFromString(values)
+
+        search = Regex(
+            ('[a-z]+(?:\[(?:"|\')|\.)([a-f0-9]+)(?:(?:\'|")\])?\s*=\s*[a-z]+(?:\[(?:"|\')|\.)'+token+'(?:(?:\'|")\])?')
+        ).search(source)
+        values[search.group(1)] = data[token]
+
     except:
-        Log.Debug(value)
+        Log.Debug(values)
         Log(e.msg)
         return None
 
