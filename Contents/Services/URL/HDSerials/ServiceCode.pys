@@ -40,7 +40,7 @@ def MediaObjectsForURL(url):
         session = JSON.StringFromObject(item['session'])
     else:
         if url.episode:
-            season = item['episode'][0]
+            season = item['season']
             episode = url.episode
 
     return [
@@ -91,11 +91,11 @@ def MetadataObjectForURL(url):
         obj = EpisodeObject(
             rating_key=Common.GetEpisodeURL(
                 item['url'],
-                item['episode'][0],
+                item['season'],
                 episode
             ),
             title=u'%d серия' % episode,
-            season=int(item['episode'][0]),
+            season=int(item['season']),
             index=int(episode),
             show=item['title'],
             **kwargs

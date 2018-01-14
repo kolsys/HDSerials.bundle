@@ -220,7 +220,7 @@ def ShowInfo(path, **kwargs):
         if 'translation' in kwargs and kwargs['translation']:
             if token != kwargs['translation']:
                 data['url'] = data['url'].replace(token, kwargs['translation'])
-                data = UpdateItemInfo(data, data['episode'][0], data['episode'][1])
+                data = UpdateItemInfo(data, data['season'], data['episode'])
         else:
             return Translations(data['path'])
 
@@ -270,7 +270,7 @@ def Seasons(path):
         return ContentNotFound()
 
     if len(data['seasons']) == 1:
-        return Episodes(path, data['episode'][0])
+        return Episodes(path, data['season'])
 
     oc = ObjectContainer(
         title2=data['title'],
@@ -286,7 +286,7 @@ def Seasons(path):
             ),
             rating_key=Common.GetEpisodeURL(data['url'], season, 0),
             index=int(season),
-            title=u'%d Сезон' % season,
+            title=u'%d Сезон' % int(season),
             source_title=L(Common.TITLE),
             thumb=data['thumb'],
             # summary=data['summary']
@@ -304,18 +304,18 @@ def Episodes(path, season):
     if not data:
         return ContentNotFound()
 
-    if season != data['episode'][0]:
+    if season != data['season']:
         data = UpdateItemInfo(data, season, 1)
         if not data:
             return ContentNotFound()
 
     oc = ObjectContainer(
-        title2=u'%s / %s' % (data['title'], data['episode'][0]),
+        title2=u'%s / %s' % (data['title'], data['season']),
         content=ContainerContent.Episodes
     )
 
     for episode in data['episodes']:
-        oc.add(Common.GetVideoObject(data, episode[1]))
+        oc.add(Common.GetVideoObject(data, episode))
 
     return oc
 
@@ -333,8 +333,8 @@ def GetMeta(path, episode):
     episode = int(episode)
 
     item = ParsePage(path)
-    if episode and episode != item['episode'][1]:
-        item = UpdateItemInfo(item, item['episode'][0], episode)
+    if episode and episode != item['episode']:
+        item = UpdateItemInfo(item, item['season'], episode)
 
     return JSON.StringFromObject(item)
 
