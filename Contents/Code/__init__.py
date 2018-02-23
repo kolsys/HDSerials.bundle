@@ -387,13 +387,17 @@ def ParsePage(path):
     ret = {
         'path': path,
         'rating': 0.00,
-        'thumb': '%s%s' % (
+        'thumb': None,
+    }
+    try:
+        ret['thumb'] = '%s%s' % (
             Common.HDSERIALS_URL,
             page.xpath(
                 '//div[@class="itemImageBlock"]//a'
             )[0].get('href')
-        ),
-    }
+        )
+    except:
+        pass
 
     title = [
         l.strip() for l in page.xpath(
