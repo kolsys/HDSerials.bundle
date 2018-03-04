@@ -99,15 +99,20 @@ def ShowFeed(path, title):
     if not page:
         return ContentNotFound()
 
-    oc = ObjectContainer(title2=u'Популярное')
+    oc = ObjectContainer(title2=u'%s' % title)
     for item in page:
         link = item.find('a')
         if link:
-            oc.add(DirectoryObject(
-                key=Callback(ShowInfo, path=link.get('href')),
-                title=item.find('h4').text_content(),
-                thumb=link.find('img').get('src')
-            ))
+            thumb = link.find('img').get('src')
+        else: # Temporary fix
+            link = item.find('h4').find('a')
+            thumb = None
+
+        oc.add(DirectoryObject(
+            key=Callback(ShowInfo, path=link.get('href')),
+            title=item.find('h4').text_content(),
+            thumb=thumb
+        ))
 
     return oc
 
@@ -122,7 +127,9 @@ def ShowCategory(path, title, show_items=False):
     oc = ObjectContainer(title2=u'%s' % title)
 
     items = page.xpath(
-        '//div[@class="itemList"]//div[@class="catItemBody"]//span[@class="catItemImage"]/a'
+        # temp fix
+        # '//div[@class="itemList"]//div[@class="catItemBody"]//span[@class="catItemImage"]/a'
+        '//div[@class="itemList"]//div[@class="catItemHeader"]//h3[@class="catItemTitle"]/a'
     )
     cats = None
 
@@ -140,25 +147,31 @@ def ShowCategory(path, title, show_items=False):
             ))
 
         for item in cats:
-            title = u'%s' % item.text_content()
+            item_title = u'%s' % item.text_content()
             oc.add(DirectoryObject(
-                title=title,
-                key=Callback(ShowCategory, path=item.get('href'), title=title)
+                title=item_title,
+                key=Callback(ShowCategory, path=item.get('href'), title=item_title)
             ))
     elif items:
         # View subcategory with single item
-        if not show_items and len(items) == 1:
+        if len(items) == 1:
             return ShowInfo(items[0].get('href'))
 
         for item in items:
-            title = u'%s' % item.text_content()
-            oc.add(DirectoryObject(
-                title=u'%s' % item.get('title'),
-                key=Callback(ShowInfo, path=item.get('href')),
-                thumb='%s%s' % (
+            try:
+                item_title = u'%s' % item.get('title')
+                thumb = '%s%s' % (
                     Common.HDSERIALS_URL,
                     item.find('img').get('src')
-                ),
+                )
+            except:
+                item_title = u'%s' % item.text_content()
+                thumb = None
+
+            oc.add(DirectoryObject(
+                title=item_title,
+                key=Callback(ShowInfo, path=item.get('href')),
+                thumb=thumb,
             ))
         next_page = page.xpath(
             '//div[@class="k2Pagination"]/ul/li[@class="pagination-next"]/a'
