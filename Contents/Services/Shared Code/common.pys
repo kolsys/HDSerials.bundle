@@ -141,7 +141,7 @@ def GetInfoByURL(url, parent=None):
     try:
         values = Template(
             Regex(':[^:,"]+\.([^\.,}"]+)').sub(':"$\\1"', values)
-        ).substitute(data)
+        ).safe_substitute(data)
         values = JSON.ObjectFromString(values)
 
         search = Regex(
