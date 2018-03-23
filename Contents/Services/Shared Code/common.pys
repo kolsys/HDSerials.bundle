@@ -129,7 +129,7 @@ def GetInfoByURL(url, parent=None):
             try:
                 source = HTTP.Request('http://moonwalk.cc'+src, cacheTime=CACHE_1HOUR).content
                 values = Regex(
-                    ('({[^{]+p_domain_id[^}]+})')
+                    ('({[^{]+ad_attr[^}]+})')
                 ).search(source).group(1)
 
             except:
